@@ -8,7 +8,7 @@ import java.util.Comparator;
  * 贪心算法 ( 贪心思想 ) 采用贪心的策略, 保证每次操作都是局部最优的,
  * 从而使最后得到的结果是全局最优的.
  */
-public class greedyAlgorithm {
+public class GreedyAlgorithm {
     public static void main(String[] args) {
 
     }

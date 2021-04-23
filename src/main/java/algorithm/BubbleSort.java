@@ -1,6 +1,6 @@
 package algorithm;
 
-public class bubbleSort {
+public class BubbleSort {
 
     public static void main(String[] args) {
         int nums[] = new int[]{2, 8, 99, 15, 73, 65, 42, 37, 65};
