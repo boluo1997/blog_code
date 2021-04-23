@@ -99,13 +99,15 @@ public class My {
             @Override
             public StructType bufferSchema() {
                 return new StructType()
-                        .add("lastDay", "date")                // 0上一天
-                        .add("today", "date")                // 1今天
-                        .add("endDay", "date")                // 2结束日
+                        .add("lastDay", "date")                 // 0上一天
+                        .add("today", "date")                   // 1今天
+                        .add("endDay", "date")                  // 2结束日
                         .add("daySumAmount", "long")            // 3今天(未结束)的金额
-                        .add("fixedAmount", "long")            // 4固定总金额
-                        .add("alreadyOutAmount", "long")    // 5已经分配的金额
-                        .add("isOutput", "boolean");            // 6本行是否输出
+                        .add("fixedAmount", "long")             // 4固定总金额
+                        .add("alreadyOutAmount", "long")        // 5已经分配的金额
+                        .add("isOutput", "boolean")             // 6本行是否输出
+                        .add("line", "int")                     // 7执行到第几行了
+                        .add("days", "int");                    // 8总天数
 
             }
 
@@ -130,17 +132,44 @@ public class My {
                 buffer.update(4, 0L);
                 buffer.update(5, 0L);
                 buffer.update(6, false);
+                buffer.update(7, 1);
+                buffer.update(8, 0);
             }
 
             @Override
             public void update(MutableAggregationBuffer buffer, Row input) {
-                // 如果input中得到的天数和上一天相等, 就累加这一天的数据
+
                 Timestamp startTs = (Timestamp) input.get(0);
                 Date inputTodayDate = new Date(startTs.getTime());
                 String fixedAmountStr = (String) input.get(3);
                 long fixedAmount = Long.parseLong(fixedAmountStr);
                 Date inputEndDay = (Date) input.get(6);
+                Date lastDay = (Date) buffer.get(0);
+                int lines = (int) buffer.get(7);
 
+                if(lines == 1){     //拿初始日, 计算总天数
+                    int days = inputEndDay.toLocalDate().getDayOfYear() - inputTodayDate.toLocalDate().getDayOfYear();
+                    buffer.update(8, days);
+                }
+
+                if (Objects.isNull(lastDay) ||
+                        lastDay.toLocalDate().getDayOfYear() == inputTodayDate.toLocalDate().getDayOfYear()) {
+
+                    // 本行不输出
+                    buffer.update(6, false);
+
+                } else {
+                    // 需要输出中间间隔天数的数据
+                    buffer.update(6, true);
+
+                    List<Row> result = Lists.newArrayList();
+                    for (LocalDate startDay = lastDay.toLocalDate(); startDay.compareTo(inputTodayDate.toLocalDate()) < 0; startDay = startDay.plusDays(1)) {
+                        result.add(RowFactory.create(Date.valueOf(startDay), 2L));
+                    }
+
+                }
+
+//              如果input中得到的天数和上一天相等, 就累加这一天的数据
 //				Date sqlBufferDate = (Date) buffer.get(0);
 //				if (inputTodayDate.getTime() == sqlBufferDate.getTime()) {
 //					long todayIncome = (long) input.get(2);
@@ -152,6 +181,7 @@ public class My {
                 buffer.update(1, inputTodayDate);
                 buffer.update(2, inputEndDay);
                 buffer.update(4, fixedAmount);
+                buffer.update(7, lines+1);
             }
 
             @Override
@@ -161,23 +191,19 @@ public class My {
 
             @Override
             public Object evaluate(Row buffer) {
-
-                Date lastDay = (Date) buffer.get(0);
-                Date todayDay = (Date) buffer.get(1);
-
-                if (Objects.isNull(lastDay) ||
-                        lastDay.toLocalDate().getDayOfYear() == todayDay.toLocalDate().getDayOfYear()) {
-
+                boolean b1 = (boolean) buffer.get(6);
+                if (!b1) {
                     return null;
                 } else {
-                    // 需要输出中间间隔天数的数据
                     List<Row> result = Lists.newArrayList();
+                    Date lastDay = (Date) buffer.get(0);
+                    Date todayDay = (Date) buffer.get(1);
                     for (LocalDate startDay = lastDay.toLocalDate(); startDay.compareTo(todayDay.toLocalDate()) < 0; startDay = startDay.plusDays(1)) {
                         result.add(RowFactory.create(Date.valueOf(startDay), 2L));
                     }
+
                     return result.toArray(new Row[0]);
                 }
-
             }
 
         }.apply(expr(instantTime), expr(income), expr(subject), expr(fixedAmount),

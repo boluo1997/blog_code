@@ -83,7 +83,7 @@ public class FuncTest {
         ), Encoders.tuple(Encoders.STRING(), Encoders.STRING(), Encoders.LONG()));
         Dataset<Row> df = ds
                 .withColumn("ex", My.分摊分成("timestamp(_1)", "_3", "_2",
-                        "if(_2=null,null,8)", "null", "null", "date('2020-04-09')")
+                        "if(_2=null,null,9)", "null", "null", "date('2020-04-09')")
                         .over(Window.orderBy("_1")))
                 .selectExpr("ex");
         df.show(false);
