@@ -107,7 +107,9 @@ public class My {
                         .add("alreadyOutAmount", "long")        // 5已经分配的金额
                         .add("isOutput", "boolean")             // 6本行是否输出
                         .add("line", "int")                     // 7执行到第几行了
-                        .add("days", "int");                    // 8总天数
+                        .add("days", "double")                     // 8总天数
+                        .add("whichDay", "double")                 // 9执行到第几天
+                        .add("res", "long");                    // 10本行的结果
 
             }
 
@@ -133,7 +135,9 @@ public class My {
                 buffer.update(5, 0L);
                 buffer.update(6, false);
                 buffer.update(7, 1);
-                buffer.update(8, 0);
+                buffer.update(8, 0.0);
+                buffer.update(9, 1.0);
+                buffer.update(10, 0L);
             }
 
             @Override
@@ -147,9 +151,9 @@ public class My {
                 Date lastDay = (Date) buffer.get(0);
                 int lines = (int) buffer.get(7);
 
-                if(lines == 1){     //拿初始日, 计算总天数
+                if (lines == 1) {     //拿初始日, 计算总天数
                     int days = inputEndDay.toLocalDate().getDayOfYear() - inputTodayDate.toLocalDate().getDayOfYear();
-                    buffer.update(8, days);
+                    buffer.update(8, (double) days);
                 }
 
                 if (Objects.isNull(lastDay) ||
@@ -160,11 +164,18 @@ public class My {
 
                 } else {
                     // 需要输出中间间隔天数的数据
+                    long sum = (long) buffer.get(4);
                     buffer.update(6, true);
-
+                    long alreadyConsume = (long) buffer.get(5);
+                    double days = (double) buffer.get(8);
+                    double whichDay = (double) buffer.get(9);
                     List<Row> result = Lists.newArrayList();
                     for (LocalDate startDay = lastDay.toLocalDate(); startDay.compareTo(inputTodayDate.toLocalDate()) < 0; startDay = startDay.plusDays(1)) {
-                        result.add(RowFactory.create(Date.valueOf(startDay), 2L));
+                        long res = Math.round(whichDay / days * sum - alreadyConsume);
+                        result.add(RowFactory.create(Date.valueOf(startDay), res));
+                        buffer.update(5, alreadyConsume + res);
+                        buffer.update(9, whichDay + 1);
+                        buffer.update(10, res);
                     }
 
                 }
@@ -181,7 +192,7 @@ public class My {
                 buffer.update(1, inputTodayDate);
                 buffer.update(2, inputEndDay);
                 buffer.update(4, fixedAmount);
-                buffer.update(7, lines+1);
+                buffer.update(7, lines + 1);
             }
 
             @Override
@@ -199,7 +210,7 @@ public class My {
                     Date lastDay = (Date) buffer.get(0);
                     Date todayDay = (Date) buffer.get(1);
                     for (LocalDate startDay = lastDay.toLocalDate(); startDay.compareTo(todayDay.toLocalDate()) < 0; startDay = startDay.plusDays(1)) {
-                        result.add(RowFactory.create(Date.valueOf(startDay), 2L));
+                        result.add(RowFactory.create(Date.valueOf(startDay), buffer.get(10)));
                     }
 
                     return result.toArray(new Row[0]);
