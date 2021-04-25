@@ -85,6 +85,16 @@ public class My {
         return new UserDefinedAggregateFunction() {
 
             private int IDX_LASTDAY = 0;
+            private int IDX_TODAY = 1;
+            private int IDX_TOTALAMOUNT = 4;
+            private int IDX_OUTAMOUNT = 5;
+            private int IDX_ISOUTPUT = 6;
+            private int IDX_WHICHLINE = 7;
+            private int IDX_TOTALDAYS = 8;
+            private int IDX_WHICHDAY = 9;
+            private int IDX_THERESULT = 10;
+            private int IDX_PREVIOUSRESULT = 11;
+            private int IDX_PREVIOUSDAY = 12;
 
             @Override
             public StructType inputSchema() {
@@ -132,64 +142,62 @@ public class My {
             @Override
             public void initialize(MutableAggregationBuffer buffer) {
                 buffer.update(IDX_LASTDAY, null);
-                buffer.update(1, null);
+                buffer.update(IDX_TODAY, null);
                 buffer.update(2, null);
                 buffer.update(3, 0L);
-                buffer.update(4, 0L);
-                buffer.update(5, 0L);
-                buffer.update(6, false);
-                buffer.update(7, 1);
-                buffer.update(8, 0.0);
-                buffer.update(9, 1);
-                buffer.update(10, 0L);
-                buffer.update(11, 0L);
-
+                buffer.update(IDX_TOTALAMOUNT, 0L);
+                buffer.update(IDX_OUTAMOUNT, 0L);
+                buffer.update(IDX_ISOUTPUT, false);
+                buffer.update(IDX_WHICHLINE, 1);
+                buffer.update(IDX_TOTALDAYS, 0.0);
+                buffer.update(IDX_WHICHDAY, 1);
+                buffer.update(IDX_THERESULT, 0L);
+                buffer.update(IDX_PREVIOUSRESULT, 0L);
+                buffer.update(IDX_PREVIOUSDAY, 0);
             }
 
             @Override
             public void update(MutableAggregationBuffer buffer, Row input) {
-                buffer.update(0, buffer.get(1));
-                buffer.update(11, buffer.get(5));
-                buffer.update(12, buffer.get(9));
+                buffer.update(IDX_LASTDAY, buffer.get(IDX_TODAY));
+                buffer.update(IDX_PREVIOUSRESULT, buffer.get(IDX_OUTAMOUNT));
+                buffer.update(IDX_PREVIOUSDAY, buffer.get(IDX_WHICHDAY));
 
                 Timestamp startTs = (Timestamp) input.get(0);        // 输出起始日, 上一天, 因为今天要输出上一天的结果
                 Date inputTodayDate = new Date(startTs.getTime());
 
-                Date inputEndDay = (Date) input.get(6);
-                Date lastDay = (Date) buffer.get(IDX_LASTDAY);
-                int lines = (int) buffer.get(7);
+                Date inputEndDay = input.getAs(6);
+                Date lastDay = buffer.getAs(IDX_LASTDAY);
+                int lines = buffer.getAs(IDX_WHICHLINE);
                 long sum = Long.parseLong((String) input.get(3));                // 固定总金额
 
                 if (lines == 1) {     //拿初始日, 计算总天数
                     int days = inputEndDay.toLocalDate().getDayOfYear() - inputTodayDate.toLocalDate().getDayOfYear();
-                    buffer.update(8, (double) days);
+                    buffer.update(IDX_TOTALDAYS, (double) days);
                 }
 
                 if (Objects.isNull(lastDay) ||
                         lastDay.toLocalDate().getDayOfYear() == inputTodayDate.toLocalDate().getDayOfYear()) {
 
-                    buffer.update(6, false);    // 本行不输出
+                    buffer.update(IDX_ISOUTPUT, false);    // 本行不输出
                 } else {
-                    buffer.update(6, true);
+                    buffer.update(IDX_ISOUTPUT, true);
 
-                    double days = (double) buffer.get(8);            // 总天数
+                    double days = (double) buffer.get(IDX_TOTALDAYS);            // 总天数
 
                     for (LocalDate startDay = lastDay.toLocalDate(); startDay.compareTo(inputTodayDate.toLocalDate()) < 0; startDay = startDay.plusDays(1)) {
-                        int whichDay = buffer.getAs(9);        // 执行到第几天的数据了(不是第几行)
-                        long alreadyConsume = buffer.getAs(5);        // 已经分配出去的金额
+                        int whichDay = buffer.getAs(IDX_WHICHDAY);        // 执行到第几天的数据了(不是第几行)
+                        long alreadyConsume = buffer.getAs(IDX_OUTAMOUNT);        // 已经分配出去的金额
                         long res = Math.round(whichDay / days * sum - alreadyConsume);
 
-                        buffer.update(5, alreadyConsume + res);        // 这一行结束后, 分配出去的总金额
-                        buffer.update(9, whichDay + 1);                // 这一行结束后, 会执行到第几天
-                        buffer.update(10, res);    // 这一行最后的结果
+                        buffer.update(IDX_OUTAMOUNT, alreadyConsume + res);        // 这一行结束后, 分配出去的总金额
+                        buffer.update(IDX_WHICHDAY, whichDay + 1);                // 这一行结束后, 会执行到第几天
                     }
 
                 }
 
-                buffer.update(1, inputTodayDate);
-                buffer.update(2, inputEndDay);
-                buffer.update(7, lines + 1);
-                buffer.update(4, sum);
+                buffer.update(IDX_TODAY, inputTodayDate);
+                buffer.update(IDX_WHICHLINE, lines + 1);
+                buffer.update(IDX_TOTALAMOUNT, sum);
             }
 
             @Override
@@ -199,26 +207,23 @@ public class My {
 
             @Override
             public Object evaluate(Row buffer) {
-                boolean b1 = (boolean) buffer.get(6);
+                boolean b1 = buffer.getAs(IDX_ISOUTPUT);
                 if (!b1) {
                     return null;
                 } else {
                     List<Row> result = Lists.newArrayList();
-                    Date lastDay = (Date) buffer.get(0);
-                    Date todayDay = (Date) buffer.get(1);
+                    Date lastDay = buffer.getAs(IDX_LASTDAY);
+                    Date todayDay = buffer.getAs(IDX_TODAY);
 
+                    int lastDayCount = buffer.getAs(IDX_PREVIOUSDAY);
+                    double days = buffer.getAs(IDX_TOTALDAYS);            // 总天数
+                    long sum = buffer.getAs(IDX_TOTALAMOUNT);            // 总金额
 
-                    int lastDayCount = buffer.getAs(12);
-                    int todayCount = buffer.getAs(9);
-                    double days = (double) buffer.get(8);            // 总天数
-                    long sum = (long) buffer.get(4);            // 总金额
-
-                    long lastSumMoney = buffer.getAs(11);
-                    long todaySumMoney = buffer.getAs(5);
+                    long lastSumMoney = buffer.getAs(IDX_PREVIOUSRESULT);
 
                     for (LocalDate startDay = lastDay.toLocalDate(); startDay.compareTo(todayDay.toLocalDate()) < 0; startDay = startDay.plusDays(1)) {
 
-                        long res = Math.round( lastDayCount++ / days * sum - lastSumMoney);
+                        long res = Math.round(lastDayCount++ / days * sum - lastSumMoney);
                         result.add(RowFactory.create(Date.valueOf(startDay), res));
                         lastSumMoney += res;
 
