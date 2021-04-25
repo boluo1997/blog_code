@@ -84,17 +84,17 @@ public class My {
                               String fixedAmount, String liquidRatio, String noLiquidRatio, String endDate) {
         return new UserDefinedAggregateFunction() {
 
-            private int IDX_LASTDAY = 0;
-            private int IDX_TODAY = 1;
-            private int IDX_TOTALAMOUNT = 4;
-            private int IDX_OUTAMOUNT = 5;
-            private int IDX_ISOUTPUT = 6;
-            private int IDX_WHICHLINE = 7;
-            private int IDX_TOTALDAYS = 8;
-            private int IDX_WHICHDAY = 9;
+            private int IDX_ISOUTPUT = 0;
+            private int IDX_WHICHLINE = 1;
+            private int IDX_LASTDAY = 2;
+            private int IDX_TODAY = 3;
+            private int IDX_TOTALDAYS = 4;
+            private int IDX_WHICHDAY = 5;
+            private int IDX_TOTALAMOUNT = 6;
+            private int IDX_OUTAMOUNT = 7;
+            private int IDX_PREVIOUSDAY = 8;
+            private int IDX_PREVIOUSRESULT = 9;
             private int IDX_THERESULT = 10;
-            private int IDX_PREVIOUSRESULT = 11;
-            private int IDX_PREVIOUSDAY = 12;
 
             @Override
             public StructType inputSchema() {
@@ -111,20 +111,17 @@ public class My {
             @Override
             public StructType bufferSchema() {
                 return new StructType()
-                        .add("lastDay", "date")                 // 0上一天
-                        .add("today", "date")                   // 1今天
-                        .add("endDay", "date")                  // 2结束日
-                        .add("daySumAmount", "long")            // 3今天(未结束)的金额
-                        .add("fixedAmount", "long")             // 4固定总金额
-                        .add("alreadyOutAmount", "long")        // 5已经分配的金额
-                        .add("isOutput", "boolean")             // 6本行是否输出
-                        .add("line", "int")                     // 7执行到第几行了
-                        .add("days", "double")                  // 8总天数
-                        .add("whichDay", "int")              // 9执行到第几天
-                        .add("res", "long")                     // 10本行的结果
-                        .add("lastAmount", "long")                // 11上一行结束时的累加
-                        .add("lastDay1", "int");                  // 12上一行执行到的天数
-
+                        .add("isOutput", "boolean")             // 0本行是否输出
+                        .add("line", "int")                     // 1执行到第几行了
+                        .add("lastDay", "date")                 // 2上一天
+                        .add("today", "date")                   // 3今天
+                        .add("days", "double")                  // 4总天数
+                        .add("whichDay", "int")                 // 5执行到第几天
+                        .add("fixedAmount", "long")             // 6固定总金额
+                        .add("alreadyOutAmount", "long")        // 7已经分配的金额
+                        .add("lastDay1", "int")                 // 8上一行执行到的天数
+                        .add("lastAmount", "long")              // 9上一行结束时的累加
+                        .add("res", "long");                    // 10本行的结果
             }
 
             @Override
@@ -143,8 +140,6 @@ public class My {
             public void initialize(MutableAggregationBuffer buffer) {
                 buffer.update(IDX_LASTDAY, null);
                 buffer.update(IDX_TODAY, null);
-                buffer.update(2, null);
-                buffer.update(3, 0L);
                 buffer.update(IDX_TOTALAMOUNT, 0L);
                 buffer.update(IDX_OUTAMOUNT, 0L);
                 buffer.update(IDX_ISOUTPUT, false);
@@ -212,21 +207,18 @@ public class My {
                     return null;
                 } else {
                     List<Row> result = Lists.newArrayList();
-                    Date lastDay = buffer.getAs(IDX_LASTDAY);
-                    Date todayDay = buffer.getAs(IDX_TODAY);
+                    Date lastDay = buffer.getAs(IDX_LASTDAY);           //上一行日期
+                    Date todayDay = buffer.getAs(IDX_TODAY);            //本行日期
 
-                    int lastDayCount = buffer.getAs(IDX_PREVIOUSDAY);
+                    int lastDayCount = buffer.getAs(IDX_PREVIOUSDAY);     // 上一行开始是第几天
                     double days = buffer.getAs(IDX_TOTALDAYS);            // 总天数
-                    long sum = buffer.getAs(IDX_TOTALAMOUNT);            // 总金额
-
-                    long lastSumMoney = buffer.getAs(IDX_PREVIOUSRESULT);
+                    long sum = buffer.getAs(IDX_TOTALAMOUNT);             // 总金额
+                    long lastSumMoney = buffer.getAs(IDX_PREVIOUSRESULT); // 上一行结束时的累加金额
 
                     for (LocalDate startDay = lastDay.toLocalDate(); startDay.compareTo(todayDay.toLocalDate()) < 0; startDay = startDay.plusDays(1)) {
-
                         long res = Math.round(lastDayCount++ / days * sum - lastSumMoney);
                         result.add(RowFactory.create(Date.valueOf(startDay), res));
                         lastSumMoney += res;
-
                     }
 
                     return result.toArray(new Row[0]);
