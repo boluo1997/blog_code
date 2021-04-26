@@ -1,4 +1,4 @@
-package dataStructure;
+package dataStructure.seqList;
 
 public interface ListIntf {
 

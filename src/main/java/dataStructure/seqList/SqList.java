@@ -1,4 +1,6 @@
-package dataStructure;
+package dataStructure.seqList;
+
+import dataStructure.seqList.ListIntf;
 
 public class SqList implements ListIntf {
 
