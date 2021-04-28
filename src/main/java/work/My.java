@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.*;
 import com.github.fge.jsonpatch.JsonPatch;
 import com.github.fge.jsonpatch.JsonPatchException;
+import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.cache.Cache;
@@ -104,14 +105,14 @@ public class My {
                         .add("固定金额", "long")
                         .add("非加液分成比例", "double")
                         .add("加液分成比例", "double")
-                        .add("总天数", "double");
+                        .add("总天数", "int");
             }
 
             @Override
             public StructType bufferSchema() {
                 StructType aType = new StructType()
                         .add("totalAmount", "long")			// a 固定总金额 0
-                        .add("totalDays", "double")			// d 总天数 1
+                        .add("totalDays", "int")				// d 总天数 1
                         .add("noLiquidRate", "double")		// k 非加液利率 2
                         .add("liquidRate", "double")			// q 加液利率 3
                         .add("previousNoLiquidSum", "long")	// San	上一天非加液收入总和 4
@@ -124,7 +125,6 @@ public class My {
                 return new StructType()
                         .add("curr", aType)
                         .add("next", aType);
-
             }
 
             @Override
@@ -142,7 +142,7 @@ public class My {
             @Override
             public void initialize(MutableAggregationBuffer buffer) {
 
-                Row row = RowFactory.create(0L, 0.0, 0.0, 0.0, 0L, 0L, 0L, 0L, 0, null);
+                Row row = RowFactory.create(0L, 0, 0.0, 0.0, 0L, 0L, 0L, 0L, 0, null);
                 buffer.update(0, row);
                 buffer.update(1, row);
             }
@@ -150,29 +150,15 @@ public class My {
             @Override
             public void update(MutableAggregationBuffer buffer, Row input) {
 
-                Long nextSum = input.getAs(3);
-                Double nextNoLiquidRate = input.getAs(4);
-                Double nextLiquidRate = input.getAs(5);
-                Double nextDays = input.getAs(6);
-
-                boolean b1 = Objects.isNull(nextSum) && Objects.isNull(nextNoLiquidRate)
-                        && Objects.isNull(nextLiquidRate) && Objects.isNull(nextDays);
+                buffer.update(0, buffer.get(1));
 
                 Timestamp nextTimestamp = input.getAs(0);
                 Date date2 = new Date(nextTimestamp.getTime());
 
-                if (!b1) {
-                    buffer.update(0, buffer.get(1));
-                } else {
-
-                }
-
                 Row currType = buffer.getAs(0);
-                Row nextType = buffer.getAs(1);
-
                 // 四个定值 总金额、总天数、加液利率、非加液利率
                 long sum = currType.getAs(IDX_TOTALAMOUNT);							// 固定总金额		a
-                double days = currType.getAs(IDX_TOTALDAYS);						// 总天数		d
+                int days = currType.getAs(IDX_TOTALDAYS);							// 总天数		d
                 double noLiquidRate = currType.getAs(IDX_NOLIQUIDRATE);				// 非加液利率		k
                 double liquidRate = currType.getAs(IDX_LIQUIDRATE);					// 加液利率		q
                 long preNoLiquidSum = currType.getAs(IDX_PREVIOUSNOLIQUIDSUM);		// 上一天非加液收入总和	San
@@ -181,7 +167,6 @@ public class My {
                 long preRateSum = currType.getAs(IDX_PREVIOUSRATESUM);				// 上一天固定收入的支出总和	Syn
                 int n = currType.getAs(IDX_WHICHDAY);								// n1
                 Date date1 = currType.getAs(IDX_WHICHDATE);							// date1
-                // Date date2 = nextType.getAs(IDX_WHICHDATE);						// date2
 
                 int n2 = 0;
                 if (!Objects.isNull(date1)) {
@@ -192,7 +177,7 @@ public class My {
                 long noLiquidIncome = 0L;
 
                 String subject = input.getAs(2);
-                if(Strings.isNullOrEmpty(subject)){
+                if (Strings.isNullOrEmpty(subject)) {
 
                 } else if (subject.equals("主营业务收入.收入.加液") || subject.equals("主营业务收入.退款.加液")) {
                     liquidIncome = input.getAs(1);
@@ -202,7 +187,7 @@ public class My {
 
                 for (int i = n; i < n2; i++) {
 
-                    long res = Math.round(sum / days * (n+1) - outAmount);			// Sxn`
+                    long res = Math.round(1.0 * sum / days * (i+1) - outAmount);			// Sxn`
                     outAmount += res;
 
                     long res2 = Math.round(preNoLiquidSum * noLiquidRate + preLiquidSum * liquidRate - preRateSum);
@@ -211,11 +196,26 @@ public class My {
                 preNoLiquidSum += noLiquidIncome;		// San`
                 preLiquidSum += liquidIncome;			// Sbn`
 
-                // 更新next
-                Row nextRow = RowFactory.create(nextSum, nextDays, nextNoLiquidRate, nextLiquidRate, preNoLiquidSum,
-                        preLiquidSum, outAmount, preRateSum, n2, date2);
+                Long nextSum = input.getAs(3);
 
-                buffer.update(1, nextRow);
+                Double nextNoLiquidRate = input.getAs(4);
+                Double nextLiquidRate = input.getAs(5);
+                Integer nextDays = input.getAs(6);
+                boolean b1 = Objects.isNull(nextSum) && Objects.isNull(nextNoLiquidRate)
+                        && Objects.isNull(nextLiquidRate) && Objects.isNull(nextDays);
+                if(!b1){
+                    nextSum = MoreObjects.firstNonNull(nextSum, 0L);
+                    nextDays = MoreObjects.firstNonNull(nextDays, 0);
+                    nextNoLiquidRate = MoreObjects.firstNonNull(nextNoLiquidRate, 0.0);
+                    nextLiquidRate = MoreObjects.firstNonNull(nextLiquidRate, 0.0);
+                    Row nextRow2 = RowFactory.create(nextSum, nextDays, nextNoLiquidRate, nextLiquidRate, preNoLiquidSum,
+                            preLiquidSum, outAmount, preRateSum, n2, date2);
+                    buffer.update(1, nextRow2);
+                }else {
+                    Row nextRow = RowFactory.create(sum, days, noLiquidRate, liquidRate, preNoLiquidSum,
+                            preLiquidSum, outAmount, preRateSum, n2, date2);
+                    buffer.update(1, nextRow);
+                }
             }
 
             @Override
@@ -226,48 +226,43 @@ public class My {
             @Override
             public Object evaluate(Row buffer) {
 
-                return null;
+                Row currType = buffer.getAs(0);
+                Row nextType = buffer.getAs(1);
 
-//				Row currType = buffer.getAs(0);
-//				Row nextType = buffer.getAs(1);
-//
-//				// 四个定值 总金额、总天数、加液利率、非加液利率
-//				long sum = currType.getAs(IDX_TOTALAMOUNT);							// 固定总金额		a
-//				double days = currType.getAs(IDX_TOTALDAYS);						// 总天数		d
-//				double noLiquidRate = currType.getAs(IDX_NOLIQUIDRATE);				// 非加液利率		k
-//				double liquidRate = currType.getAs(IDX_LIQUIDRATE);					// 加液利率		q
-//				long preNoLiquidSum = currType.getAs(IDX_PREVIOUSNOLIQUIDSUM);		// 上一天非加液收入总和	San
-//				long preLiquidSum = currType.getAs(IDX_PREVIOUSLIQUIDSUM);			// 上一天加液收入总和		Sbn
-//				long outAmount = currType.getAs(IDX_OUTAMOUNT);						// 上一天固定收入的支出总和	Sxn
-//				long preRateSum = currType.getAs(IDX_PREVIOUSRATESUM);				// 上一天固定收入的支出总和	Syn
-//				int n = currType.getAs(IDX_WHICHDAY);								// n1
-//				Date date1 = currType.getAs(IDX_WHICHDATE);							// date1
-//
-//				long sum2 = nextType.getAs(IDX_TOTALAMOUNT);							// 固定总金额		a
-//				double days2 = nextType.getAs(IDX_TOTALDAYS);						// 总天数		d
-//				double noLiquidRate2 = nextType.getAs(IDX_NOLIQUIDRATE);				// 非加液利率		k
-//				double liquidRate2 = nextType.getAs(IDX_LIQUIDRATE);					// 加液利率		q
-//				long preNoLiquidSum2 = nextType.getAs(IDX_PREVIOUSNOLIQUIDSUM);		// 上一天非加液收入总和	San
-//				long preLiquidSum2 = nextType.getAs(IDX_PREVIOUSLIQUIDSUM);			// 上一天加液收入总和		Sbn
-//				long outAmount2 = nextType.getAs(IDX_OUTAMOUNT);						// 上一天固定收入的支出总和	Sxn
-//				long preRateSum2 = nextType.getAs(IDX_PREVIOUSRATESUM);				// 上一天固定收入的支出总和	Syn
-//				int n2 = nextType.getAs(IDX_WHICHDAY);								// n2
-//				Date date2 = nextType.getAs(IDX_WHICHDATE);							// date2
-//
-//				if ((Objects.isNull(date1) || Objects.isNull(date2)) || date2.toLocalDate().compareTo(date1.toLocalDate()) == 0) {
-//					return null;
-//				} else {
-//					List<Row> result = Lists.newArrayList();
-//					for (int i = n; i < n2; i++) {
-//						result.add(RowFactory.create(date1, 0L));
-//						date1 = Date.valueOf(date1.toLocalDate().plusDays(1));
-//					}
-//
-//					return result.toArray(new Row[0]);
-//				}
+                // 四个定值 总金额、总天数、加液利率、非加液利率
+                long sum = currType.getAs(IDX_TOTALAMOUNT);							// 固定总金额		a
+                int days = currType.getAs(IDX_TOTALDAYS);							// 总天数		d
+                double noLiquidRate = currType.getAs(IDX_NOLIQUIDRATE);				// 非加液利率		k
+                double liquidRate = currType.getAs(IDX_LIQUIDRATE);					// 加液利率		q
+                long preNoLiquidSum = currType.getAs(IDX_PREVIOUSNOLIQUIDSUM);		// 上一天非加液收入总和	San
+                long preLiquidSum = currType.getAs(IDX_PREVIOUSLIQUIDSUM);			// 上一天加液收入总和		Sbn
+                long outAmount = currType.getAs(IDX_OUTAMOUNT);						// 上一天固定收入的支出总和	Sxn
+                long preRateSum = currType.getAs(IDX_PREVIOUSRATESUM);				// 上一天固定收入的支出总和	Syn
+                int n = currType.getAs(IDX_WHICHDAY);								// n1
+                Date date1 = currType.getAs(IDX_WHICHDATE);							// date1
+                int n2 = nextType.getAs(IDX_WHICHDAY);								// n2
 
+                List<Row> result = Lists.newArrayList();
+                for (int i = n; i < n2; i++) {
+
+                    long res1 = Math.round(1.0 * sum / days * (i + 1) - outAmount);            // Sxn`
+                    long res2 = Math.round(preNoLiquidSum * noLiquidRate + preLiquidSum * liquidRate - preRateSum);
+
+                    if (preRateSum + res2 < sum) {
+                        result.add(RowFactory.create(Date.valueOf(date1.toLocalDate()), res1));
+                    } else if (preRateSum > sum) {
+                        result.add(RowFactory.create(Date.valueOf(date1.toLocalDate()), res2));
+                    } else {
+                        long res = preRateSum + res2 - outAmount;
+                        result.add(RowFactory.create(Date.valueOf(date1.toLocalDate()), res));
+                    }
+
+                    outAmount += res1;
+                    preRateSum += res2;
+                    date1 = Date.valueOf(date1.toLocalDate().plusDays(1));
+                }
+                return result.toArray(new Row[0]);
             }
-
         }.apply(expr(instantTime), expr(income), expr(subject), expr(fixedAmount),
                 expr(noLiquidRate), expr(liquidRate), expr(endDate));
     }
