@@ -197,7 +197,6 @@ public class My {
                 preLiquidSum += liquidIncome;			// Sbn`
 
                 Long nextSum = input.getAs(3);
-
                 Double nextNoLiquidRate = input.getAs(4);
                 Double nextLiquidRate = input.getAs(5);
                 Integer nextDays = input.getAs(6);
