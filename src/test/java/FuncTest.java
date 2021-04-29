@@ -26,6 +26,8 @@ import static org.apache.spark.sql.functions.*;
 import static org.junit.Assert.assertEquals;
 import java.io.IOException;
 
+import static work.My.*;
+
 public class FuncTest {
 
     private static final ObjectMapper mapper = new ObjectMapper();
@@ -46,7 +48,6 @@ public class FuncTest {
                 .with("foo3")
                 .put("foo31", "bar31")
                 .put("foo32", "bar32");
-
         patch.addObject()
                 .put("op", "replace")
                 .put("path", "/child2")
@@ -56,7 +57,6 @@ public class FuncTest {
                 .with("foo3")
                 .put("foo31", "bar31")
                 .put("foo32", "bar32");
-
         patch.addObject()
                 .put("op", "replace")
                 .put("path", "")
@@ -68,11 +68,133 @@ public class FuncTest {
                 .put("foo32", "bar32");
 
         Dataset<String> ds = spark.createDataset(ImmutableList.of(patch.toString()), Encoders.STRING());
-
-        JsonNode result = mapper.readTree(ds.select(Func.patchFilter("value", "/child/aaa", "/childfoo1"))
+        JsonNode result = mapper.readTree(ds.select(patchFilter("value", "/child/foo1"))
                 .first().getString(0));
-        Assert.assertEquals(result.size(), 0);
+        assertEquals(result.size(), 1);
+        assertEquals(result.at("/0/value").size(), 1);
+        assertEquals(result.at("/0/value/foo1"), TextNode.valueOf("bar1"));
+
+        result = mapper.readTree(ds.select(patchFilter("value", "/child/foo3", "/child/foo3/foo31"))
+                .first().getString(0));
+        assertEquals(result.size(), 1);
+        assertEquals(result.at("/0/value").size(), 1);
+        assertEquals(result.at("/0/value/foo3").size(), 1);
+        assertEquals(result.at("/0/value/foo3/foo31"), TextNode.valueOf("bar31"));
+
+        result = mapper.readTree(ds.select(patchFilter("value", "/child/foo1", "/child/foo2"))
+                .first().getString(0));
+        assertEquals(result.size(), 1);
+        assertEquals(result.at("/0/value").size(), 2);
+        assertEquals(result.at("/0/value/foo1"), TextNode.valueOf("bar1"));
+        assertEquals(result.at("/0/value/foo2"), TextNode.valueOf("bar2"));
+
+        result = mapper.readTree(ds.select(patchFilter("value", "/foo1", "/foo2"))
+                .first().getString(0));
+        assertEquals(result.size(), 1);
+        assertEquals(result.at("/0/value").size(), 2);
+        assertEquals(result.at("/0/value/foo1"), TextNode.valueOf("bar1"));
+        assertEquals(result.at("/0/value/foo2"), TextNode.valueOf("bar2"));
+
+        result = mapper.readTree(ds.select(patchFilter("value", "/child1"))
+                .first().getString(0));
+        assertEquals(result.size(), 0);
+
+        result = mapper.readTree(ds.select(patchFilter("value", "/child/abs", "/childfoo1"))
+                .first().getString(0));
+        assertEquals(result.size(), 0);
     }
+
+    @Test
+    public void patchFilterTest2() throws IOException {
+        ArrayNode patch = mapper.createArrayNode();
+        patch.addObject()
+                .put("op", "remove")
+                .put("path", "/name");
+        patch.addObject()
+                .put("op", "remove")
+                .put("path", "/code");
+        patch.addObject()
+                .put("op", "remove")
+                .put("path", "/foo/bar");
+        patch.addObject()
+                .put("op", "remove")
+                .put("path", "/foo/bar1");
+
+        Dataset<String> ds = spark.createDataset(ImmutableList.of(patch.toString()), Encoders.STRING());
+        JsonNode result = mapper.readTree(ds.select(patchFilter("value", "/foo"))
+                .first().getString(0));
+        assertEquals(result.size(), 2);
+
+        result = mapper.readTree(ds.select(patchFilter("value", "/name/first"))
+                .first().getString(0));
+        assertEquals(result.size(), 1);
+        assertEquals(result.at("/0/path"), TextNode.valueOf("/name"));
+    }
+
+    @Test
+    public void patchFilterTest3() throws IOException {
+        ArrayNode patch = mapper.createArrayNode();
+        patch.addObject()
+                .put("op", "add")
+                .put("path", "")
+                .with("value")
+                .put("foo1", "bar1")
+                .put("foo2", "bar2")
+                .with("foo3")
+                .put("foo31", "bar31")
+                .put("foo32", "bar32");
+
+        Dataset<String> ds = spark.createDataset(ImmutableList.of(patch.toString()), Encoders.STRING());
+        JsonNode result = mapper.readTree(ds.select(patchFilter("value", "/foo1"))
+                .first().getString(0));
+        assertEquals(result.size(), 1);
+        assertEquals(result.at("/0/value").size(), 1);
+        assertEquals(result.at("/0/op"), TextNode.valueOf("add"));
+        assertEquals(result.at("/0/value/foo1"), TextNode.valueOf("bar1"));
+
+        result = mapper.readTree(ds.select(patchFilter("value", "/foo3", "/foo3/foo31"))
+                .first().getString(0));
+        assertEquals(result.size(), 1);
+        assertEquals(result.at("/0/value").size(), 1);
+        assertEquals(result.at("/0/value/foo3").size(), 1);
+        assertEquals(result.at("/0/value/foo3/foo31"), TextNode.valueOf("bar31"));
+
+        result = mapper.readTree(ds.select(patchFilter("value", "/foo1", "/foo2"))
+                .first().getString(0));
+        assertEquals(result.size(), 1);
+        assertEquals(result.at("/0/value").size(), 2);
+        assertEquals(result.at("/0/value/foo1"), TextNode.valueOf("bar1"));
+        assertEquals(result.at("/0/value/foo2"), TextNode.valueOf("bar2"));
+    }
+
+    @Test
+    public void patchFilterTest4() throws IOException {
+        ArrayNode patch = mapper.createArrayNode();
+        patch.addObject()
+                .put("op", "replace")
+                .put("path", "/foo/name")
+                .put("value", "world");
+        patch.addObject()
+                .put("op", "replace")
+                .put("path", "/foo/last")
+                .put("value", "hello");
+        patch.addObject()
+                .put("op", "replace")
+                .put("path", "/foo1/last")
+                .put("value", "hello");
+
+        Dataset<String> ds = spark.createDataset(ImmutableList.of(patch.toString()), Encoders.STRING());
+        JsonNode result = mapper.readTree(ds.select(patchFilter("value", "/foo/name"))
+                .first().getString(0));
+        assertEquals(result.size(), 1);
+        assertEquals(result.at("/0/value"), TextNode.valueOf("world"));
+
+        result = mapper.readTree(ds.select(patchFilter("value", "/foo"))
+                .first().getString(0));
+        assertEquals(result.size(), 2);
+    }
+
+
 
     @Test
     public void fengtanTest3() {

@@ -29,7 +29,6 @@ import org.apache.spark.sql.api.java.UDF1;
 import org.apache.spark.sql.api.java.UDF2;
 import org.apache.spark.sql.catalyst.expressions.DateDiff;
 import org.apache.spark.sql.expressions.MutableAggregationBuffer;
-
 import org.apache.spark.sql.expressions.UserDefinedAggregateFunction;
 import org.apache.spark.sql.expressions.UserDefinedFunction;
 import org.apache.spark.sql.types.*;
@@ -60,6 +59,9 @@ import java.util.stream.Stream;
 
 import static org.apache.spark.sql.functions.*;
 
+
+import static org.apache.spark.sql.functions.*;
+
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
@@ -80,6 +82,128 @@ public class My {
                 .map(i -> i.path("o"))
                 .findFirst();
     }
+
+    public static Column patchFilter(String patch, String... retain) {
+        return udf((UDF1<?, ?>) (String p) -> {
+
+            ArrayNode a = mapper.createArrayNode();
+            String pathValueStr = "";
+
+            JsonNode jsonNode = mapper.readTree(p);
+
+            for (JsonNode node : jsonNode) {
+                switch (node.path("op").textValue()) {
+                    case "replace":
+                    case "add":
+
+                        String pathStr = node.findValue("path").asText();
+
+                        if (!node.at("/value").isObject()) {
+                            boolean b = Arrays.stream(retain).anyMatch(i -> {
+                                return (pathStr + "/").startsWith(i + "/");
+                            });
+                            if (b) {
+                                a.add(node);
+                            }
+                        } else {
+
+                            List<String> list = new LinkedList<>();
+                            for (String tempStr : retain) {
+
+                                boolean br = (tempStr + "/").startsWith(pathStr + "/");
+
+                                if (br) {
+                                    list.add(tempStr.substring(pathStr.length()));
+                                }
+                            }
+                            String[] strArr = list.toArray(new String[0]);
+
+                            ObjectNode o = (ObjectNode) node.at("/value");
+                            recursionOp(o, strArr);
+                            if (o.size() != 0) {
+                                a.addObject()
+                                        .put("op", node.findValue("op").asText())
+                                        .put("path", node.path("path").asText())
+                                        .set("value", o);
+                            }
+                        }
+
+                        break;
+                    case "remove":
+
+                        pathValueStr = node.findValue("path").asText();
+
+                        for (int j = 0; j < retain.length; j++) {
+                            String tempStr = retain[j];
+
+                            String[] pathValueArr = pathValueStr.split("/");
+                            String[] tempStrArr = tempStr.split("/");
+
+                            //路径深度一致, 判断是否完全一致
+                            if (pathValueArr.length == tempStrArr.length && pathValueStr.equals(tempStr)) {
+                                a.add(node);
+                            } else if (pathValueArr.length > tempStrArr.length) {    //如果数据湖中的路径深度 > 传入需要判断的路径深度
+                                if (pathValueStr.startsWith(tempStr)) {
+                                    a.add(node);
+                                }
+                            } else {    //如果数据湖中的路径深度 < 传入的需要比较的路径深度
+                                if (tempStr.startsWith(pathValueStr)) {
+                                    a.add(node);
+                                }
+                            }
+                        }
+
+                        break;
+
+                    default:
+                        throw new UnsupportedOperationException("非add, remove, replace操作");
+
+                }
+
+            }
+
+            return a.toString();
+        }, StringType$.MODULE$).apply(expr(patch));
+    }
+
+    private static void recursionOp(ObjectNode obj, String... retainStrArr) {
+
+        Map<String, String[]> p = new HashMap<>();
+        String[] strArr;
+
+        for (String retainStr : retainStrArr) {
+            if (retainStr.length() == 0) {
+                return;
+            }
+            int indexChar = retainStr.indexOf("/", 1);
+            if (indexChar == -1) {
+                p.put(retainStr, null);
+            } else {
+                List<String> listStr = new ArrayList<>();
+                String preStr = retainStr.substring(0, indexChar);
+                String aftStr = retainStr.substring(indexChar);
+                listStr.add(aftStr);
+                strArr = listStr.toArray(new String[0]);
+                p.put(preStr, strArr);
+            }
+        }
+
+        p.forEach((k, v) -> {
+            if (!obj.at(k).isObject() || v == null) {
+                return;
+            }
+            recursionOp((ObjectNode) obj.at(k), v);
+        });
+
+        String tempStr = "";
+        List<String> tempList = p.keySet().stream().map(i -> {
+            return i.substring(1);
+        }).collect(Collectors.toList());
+
+        obj.retain(tempList);
+
+    }
+
 
     public static Column 分摊分成(String instantTime, String income, String subject,
                               String fixedAmount, String noLiquidRate, String liquidRate, String endDate) {
