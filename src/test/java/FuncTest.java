@@ -252,5 +252,31 @@ public class FuncTest {
         assertEquals(0L, df.where("date='2020-04-08'").first().getLong(1));
     }
 
-
+    @Test
+    public void fengtanTest4() {
+        Dataset<Tuple3<String, String, Long>> ds = spark.createDataset(ImmutableList.of(
+                Tuple3.apply("2020-04-01 07:00", null, null),
+                Tuple3.apply("2020-04-01 08:00", "主营业务收入.收入.加液", 2L),
+                Tuple3.apply("2020-04-02 08:00", "主营业务收入.收入.加液", 2L),    // [4.1, 1]
+                Tuple3.apply("2020-04-03 08:00", "主营业务收入.收入.X", 4L),        // [4.2, 2]
+                Tuple3.apply("2020-04-05 16:00", "主营业务收入.收入.X", 4L),        // [4.3, 1],[4.4, 1]
+                Tuple3.apply("2020-04-06 08:00", "主营业务收入.收入.加液", 4L),    // [4.5, 1]
+                Tuple3.apply("2020-04-07 08:00", "主营业务收入.收入.加液", 2L),    // [4.6, 2]
+                Tuple3.apply("2020-04-09 07:00", null, null)                    // [4.7, 1],[4.8, 1]
+        ), Encoders.tuple(Encoders.STRING(), Encoders.STRING(), Encoders.LONG()));
+        Dataset<Row> df = ds
+                .withColumn("ex", My.阶梯分成("timestamp(_1)", "_3", "_2",
+                        "if(isnull(_2),array(struct(0.5d k,0l a),struct(0.6d k,4l a),struct(0.7d k,6l a)),null)",
+                        "if(isnull(_2),0.8,null)")
+                        .over(Window.orderBy("_1")))
+                .selectExpr("explode(ex) ex")
+                .selectExpr("ex.*");
+        assertEquals(8, df.count());
+        assertEquals(13L, df.agg(sum("amount")).first().getLong(0));
+        assertEquals(2L, df.where("date='2020-04-01'").first().getLong(1));
+        assertEquals(1L, df.where("date='2020-04-02'").first().getLong(1));
+        assertEquals(0L, df.where("date='2020-04-04'").first().getLong(1));
+        assertEquals(3L, df.where("date='2020-04-06'").first().getLong(1));
+        assertEquals(2L, df.where("date='2020-04-07'").first().getLong(1));
+    }
 }

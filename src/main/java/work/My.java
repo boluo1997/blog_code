@@ -36,6 +36,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import scala.collection.JavaConverters;
 import scala.collection.mutable.Buffer;
+import scala.collection.mutable.WrappedArray;
 
 import javax.ws.rs.HttpMethod;
 import java.io.IOException;
@@ -388,5 +389,134 @@ public class My {
             }
         }.apply(expr(instantTime), expr(income), expr(subject), expr(fixedAmount),
                 expr(noLiquidRate), expr(liquidRate), expr(endDate));
+    }
+
+
+    public static Column 阶梯分成(String instantTime, String income, String subject,
+                              String rate2, String liquidRate) {
+
+        return new UserDefinedAggregateFunction(){
+
+            @Override
+            public StructType inputSchema() {
+                return new StructType()
+                        .add("日期", "timestamp")
+                        .add("收入", "long")
+                        .add("科目", "string")
+                        .add("其余阶梯合作分成比例", "array<struct<k:double,a:bigint>>")
+                        .add("加液分成比例", "double")
+                        ;
+            }
+
+            @Override
+            public StructType bufferSchema() {
+
+                StructType aType = new StructType()
+                        .add("previousNoLiquidSum", "long")		// 上一天非加液收入总和 0
+                        .add("previousLiquidSum", "long")		// 上一天加液收入总和   1
+                        .add("previousOutSum", "long")			// 上一天支出总和		  2
+                        .add("whichDay", "int")			// n 执行到第几天的标志	3
+                        .add("whichDate", "date")		// date 日期	4
+                        .add("liquidRate", "double")				// 加液分成比例		5
+                        .add("ShareRate", "array<struct<k:double,a:bigint>>")	// 分成比例  6
+                        ;
+
+                return new StructType()
+                        .add("curr", aType)
+                        .add("next", aType)
+                        ;
+            }
+
+            @Override
+            public DataType dataType() {
+                return ArrayType.apply(new StructType()
+                        .add("date", "date")
+                        .add("amount", "long"));
+            }
+
+            @Override
+            public boolean deterministic() {
+                return false;
+            }
+
+            @Override
+            public void initialize(MutableAggregationBuffer buffer) {
+                Row row = RowFactory.create(0L, 0L, 0L, 0, null, 0.0, null);
+                buffer.update(0, row);
+                buffer.update(1, row);
+            }
+
+            @Override
+            public void update(MutableAggregationBuffer buffer, Row input) {
+                buffer.update(0, buffer.get(1));
+
+                Timestamp nextTimestamp = input.getAs(0);
+                Date date2 = new Date(nextTimestamp.getTime());
+                String subject = input.getAs(2);
+                WrappedArray<Row> nextNoLiquidRate = input.getAs(3);
+                Double nextLiquidRate = input.getAs(4);
+
+                Row currType = buffer.getAs(0);
+
+                long previousNoLiquidSum = currType.getAs(0);		// 上一天的非加液收入总和		S
+                long previousLiquidSum = currType.getAs(1);		// 上一日的加液收入总和
+                long previousOutSum = currType.getAs(2);			// 上一天的支出总和
+                int n = currType.getAs(3);						// 执行到第几天的标志
+                Date date1 = currType.getAs(4);					// 日期
+                double liquidRate = currType.getAs(5);			// 加液分成比例
+
+                int n2 = 0;
+                if (!Objects.isNull(date1)) {
+                    n2 = date2.toLocalDate().compareTo(date1.toLocalDate());
+                }
+
+                long liquidIncome = 0L;
+                long noLiquidIncome = 0L;
+
+                if (Strings.isNullOrEmpty(subject)) {
+                    logger.warn("科目为空!!!");
+                } else if (Objects.equals(subject, "主营业务收入.收入.加液") || Objects.equals(subject, "主营业务收入.退款.加液")) {
+                    liquidIncome = input.getAs(1);
+                } else {
+                    noLiquidIncome = input.getAs(1);
+                }
+
+                for (int i = n; i < n2; i++) {
+                    double liquidRes = previousLiquidSum * liquidRate;
+
+                    for (int j = 0; j < nextNoLiquidRate.size(); j++) {
+                        Row row = nextNoLiquidRate.apply(j);
+                        System.out.println(row);
+                    }
+
+                    double noLiquidRes = previousNoLiquidSum;
+                    long res = Math.round(liquidRes + noLiquidRes - previousOutSum);
+                    previousOutSum += res;
+                }
+
+                previousLiquidSum += liquidIncome;
+                previousNoLiquidSum += noLiquidIncome;
+
+                boolean b1 = Objects.isNull(nextNoLiquidRate) && Objects.isNull(nextLiquidRate);
+                if (!b1) {
+                    MoreObjects.firstNonNull(nextLiquidRate, 0.0);
+                    Row nextRow = RowFactory.create();
+                    buffer.update(1, nextRow);
+                } else {
+                    Row nextRow = RowFactory.create();
+                }
+            }
+
+            @Override
+            public void merge(MutableAggregationBuffer buffer1, Row buffer2) {
+
+            }
+
+            @Override
+            public Object evaluate(Row buffer) {
+                return null;
+            }
+        }.apply(expr(instantTime), expr(income), expr(subject),
+                expr(rate2), expr(liquidRate));
     }
 }
