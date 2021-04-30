@@ -168,6 +168,26 @@ public class FuncTest {
     }
 
     @Test
+    public void fengtanErrorTest3() {
+        Dataset<Tuple3<String, String, Long>> ds = spark.createDataset(ImmutableList.of(
+                Tuple3.apply("2019-12-30 07:00", null, null),
+                Tuple3.apply("2019-12-30 08:00", "主营业务收入.收入.加液", 2L),
+                Tuple3.apply("2020-01-01 08:00", "主营业务收入.收入.加液", 2L),
+                Tuple3.apply("2020-04-09 07:00", null, null)
+        ), Encoders.tuple(Encoders.STRING(), Encoders.STRING(), Encoders.LONG()));
+        Dataset<Row> df = ds
+                .withColumn("ex", My.分摊分成("timestamp(_1)", "_3", "_2",
+                        "if(isnull(_2),4,null)",
+                        "if(isnull(_2),0.4,null)", "if(isnull(_2),0.8,null)",
+                        "if(isnull(_2),8,null)")
+                        .over(Window.orderBy("_1")))
+                .selectExpr("explode(ex) ex")
+                .selectExpr("ex.*");
+        assertEquals(101, df.count());
+    }
+
+
+    @Test
     public void patchFilterTest4() throws IOException {
         ArrayNode patch = mapper.createArrayNode();
         patch.addObject()
