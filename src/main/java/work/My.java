@@ -396,11 +396,19 @@ public class My {
     }
 
 
-
+    
     public static Column 阶梯分成(String instantTime, String income, String subject,
                               String rate2, String liquidRate) {
 
-        return new UserDefinedAggregateFunction(){
+        return new UserDefinedAggregateFunction() {
+
+            private int IDX_PREVIOUSNOLIQUIDSUM = 0;
+            private int IDX_PREVIOUSLIQUIDSUM = 1;
+            private int IDX_PREVIOUSOUTSUM = 2;
+            private int IDX_WHICHDAY = 3;
+            private int IDX_WHICHDATE = 4;
+            private int IDX_LIQUIDRATE = 5;
+            private int IDX_NOLIQUIDRATE = 6;
 
             @Override
             public StructType inputSchema() {
@@ -417,13 +425,13 @@ public class My {
             public StructType bufferSchema() {
 
                 StructType aType = new StructType()
-                        .add("previousNoLiquidSum", "long")		// 上一天非加液收入总和 0
-                        .add("previousLiquidSum", "long")		// 上一天加液收入总和   1
-                        .add("previousOutSum", "long")			// 上一天支出总和		  2
-                        .add("whichDay", "int")			// n 执行到第几天的标志	3
-                        .add("whichDate", "date")		// date 日期	4
-                        .add("liquidRate", "double")				// 加液分成比例		5
-                        .add("ShareRate", "array<struct<k:double,a:bigint>>")	// 分成比例  6
+                        .add("previousNoLiquidSum", "long")        // 上一天非加液收入总和 0
+                        .add("previousLiquidSum", "long")        // 上一天加液收入总和   1
+                        .add("previousOutSum", "long")            // 上一天支出总和		 2
+                        .add("whichDay", "int")            // n 执行到第几天的标志	3
+                        .add("whichDate", "date")        // date 日期	4
+                        .add("liquidRate", "double")                // 加液分成比例		5
+                        .add("ShareRate", "array<struct<k:double,a:bigint>>")    // 非加液分成比例  6
                         ;
 
                 return new StructType()
@@ -463,16 +471,18 @@ public class My {
 
                 Row currType = buffer.getAs(0);
 
-                long previousNoLiquidSum = currType.getAs(0);		// 上一天的非加液收入总和		S
-                long previousLiquidSum = currType.getAs(1);		// 上一日的加液收入总和
-                long previousOutSum = currType.getAs(2);			// 上一天的支出总和
-                int n = currType.getAs(3);						// 执行到第几天的标志
-                Date date1 = currType.getAs(4);					// 日期
-                double liquidRate = currType.getAs(5);			// 加液分成比例
+                long previousNoLiquidSum = currType.getAs(IDX_PREVIOUSNOLIQUIDSUM);        // 上一天的非加液收入总和		S
+                long previousLiquidSum = currType.getAs(IDX_PREVIOUSLIQUIDSUM);        // 上一日的加液收入总和
+                long previousOutSum = currType.getAs(IDX_PREVIOUSOUTSUM);            // 上一天的支出总和
+                int n = currType.getAs(IDX_WHICHDAY);                        // 执行到第几天的标志
+                Date date1 = currType.getAs(IDX_WHICHDATE);                    // 日期
+                double liquidRate = currType.getAs(IDX_LIQUIDRATE);            // 加液分成比例
+                WrappedArray<Row> noLiquidRate = currType.getAs(IDX_NOLIQUIDRATE);    // 非加液分成比例
 
                 int n2 = 0;
                 if (!Objects.isNull(date1)) {
-                    n2 = date2.toLocalDate().compareTo(date1.toLocalDate());
+                    long differDays = date1.toLocalDate().until(date2.toLocalDate(), ChronoUnit.DAYS);
+                    n2 = n + (int) differDays;
                 }
 
                 long liquidIncome = 0L;
@@ -487,14 +497,19 @@ public class My {
                 }
 
                 for (int i = n; i < n2; i++) {
-                    double liquidRes = previousLiquidSum * liquidRate;
 
-                    for (int j = 0; j < nextNoLiquidRate.size(); j++) {
-                        Row row = nextNoLiquidRate.apply(j);
-                        System.out.println(row);
+                    double liquidRes = previousLiquidSum * liquidRate;
+                    double noLiquidRes = 0.0;
+
+                    double preK = 0;
+                    for (int j = 0; j < noLiquidRate.size(); j++) {
+                        Row row = noLiquidRate.apply(j);
+                        double k = row.getAs(0);
+                        long a = row.getAs(1);
+                        noLiquidRes += Math.max(0, previousNoLiquidSum - a) * (k - preK);
+                        preK = k;
                     }
 
-                    double noLiquidRes = previousNoLiquidSum;
                     long res = Math.round(liquidRes + noLiquidRes - previousOutSum);
                     previousOutSum += res;
                 }
@@ -505,10 +520,13 @@ public class My {
                 boolean b1 = Objects.isNull(nextNoLiquidRate) && Objects.isNull(nextLiquidRate);
                 if (!b1) {
                     MoreObjects.firstNonNull(nextLiquidRate, 0.0);
-                    Row nextRow = RowFactory.create();
+                    Row nextRow = RowFactory.create(previousNoLiquidSum, previousLiquidSum, previousOutSum,
+                            n2, date2, nextLiquidRate, nextNoLiquidRate);
                     buffer.update(1, nextRow);
                 } else {
-                    Row nextRow = RowFactory.create();
+                    Row nextRow = RowFactory.create(previousNoLiquidSum, previousLiquidSum, previousOutSum,
+                            n2, date2, liquidRate, noLiquidRate);
+                    buffer.update(1, nextRow);
                 }
             }
 
@@ -519,9 +537,42 @@ public class My {
 
             @Override
             public Object evaluate(Row buffer) {
-                return null;
+
+                Row currType = buffer.getAs(0);
+                Row nextType = buffer.getAs(1);
+
+                long previousNoLiquidSum = currType.getAs(IDX_PREVIOUSNOLIQUIDSUM);        // 上一天的非加液收入总和		S
+                long previousLiquidSum = currType.getAs(IDX_PREVIOUSLIQUIDSUM);        // 上一日的加液收入总和
+                long previousOutSum = currType.getAs(IDX_PREVIOUSOUTSUM);            // 上一天的支出总和
+                int n = currType.getAs(IDX_WHICHDAY);                        // 执行到第几天的标志
+                Date date1 = currType.getAs(IDX_WHICHDATE);                    // 日期
+                double liquidRate = currType.getAs(IDX_LIQUIDRATE);            // 加液分成比例
+                WrappedArray<Row> noLiquidRate = currType.getAs(IDX_NOLIQUIDRATE);    // 非加液分成比例
+                int n2 = nextType.getAs(IDX_WHICHDAY);                        // 日期n2
+
+                List<Row> result = Lists.newArrayList();
+                for (int i = n; i < n2; i++) {
+                    double liquidRes = previousLiquidSum * liquidRate;
+                    double noLiquidRes = 0.0;
+
+                    double preK = 0;
+                    for (int j = 0; j < noLiquidRate.size(); j++) {
+                        Row row = noLiquidRate.apply(j);
+                        double k = row.getAs(0);
+                        long a = row.getAs(1);
+                        noLiquidRes += Math.max(0, previousNoLiquidSum - a) * (k - preK);
+                        preK = k;
+                    }
+
+                    long res = Math.round(liquidRes + noLiquidRes - previousOutSum);
+                    result.add(RowFactory.create(date1, res));
+                    previousOutSum += res;
+                    date1 = Date.valueOf(date1.toLocalDate().plusDays(1));
+                }
+                return result.toArray(new Row[0]);
             }
         }.apply(expr(instantTime), expr(income), expr(subject),
                 expr(rate2), expr(liquidRate));
     }
+
 }
