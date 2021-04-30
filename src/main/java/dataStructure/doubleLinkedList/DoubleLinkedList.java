@@ -1,6 +1,6 @@
 package dataStructure.doubleLinkedList;
 
-public class doubleLinkedList {
+public class DoubleLinkedList {
 
     int size = 0;   // 节点数
     Node firstNode;     // 头结点
