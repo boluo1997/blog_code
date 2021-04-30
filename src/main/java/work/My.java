@@ -295,7 +295,10 @@ public class My {
 
                 int n2 = 0;
                 if (!Objects.isNull(date1)) {
-                    n2 = n + date2.toLocalDate().compareTo(date1.toLocalDate());	// n2 计算得出
+                    // 这里不能用compareTo方法计算两行间隔的时间
+                    long differDays = date1.toLocalDate().until(date2.toLocalDate(), ChronoUnit.DAYS);
+                    n2 = n + (int) differDays;
+                    // n2 = Math.min(differN2, days);
                 }
 
                 long liquidIncome = 0L;
@@ -303,7 +306,7 @@ public class My {
 
                 String subject = input.getAs(2);
                 if (Strings.isNullOrEmpty(subject)) {
-
+                    logger.warn("科目为空!!!");
                 } else if (subject.equals("主营业务收入.收入.加液") || subject.equals("主营业务收入.退款.加液")) {
                     liquidIncome = input.getAs(1);
                 } else {
@@ -318,6 +321,7 @@ public class My {
                     long res2 = Math.round(preNoLiquidSum * noLiquidRate + preLiquidSum * liquidRate - preRateSum);
                     preRateSum += res2;
                 }
+
                 preNoLiquidSum += noLiquidIncome;		// San`
                 preLiquidSum += liquidIncome;			// Sbn`
 
@@ -390,6 +394,7 @@ public class My {
         }.apply(expr(instantTime), expr(income), expr(subject), expr(fixedAmount),
                 expr(noLiquidRate), expr(liquidRate), expr(endDate));
     }
+
 
 
     public static Column 阶梯分成(String instantTime, String income, String subject,
