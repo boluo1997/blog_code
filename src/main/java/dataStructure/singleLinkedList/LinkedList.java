@@ -64,7 +64,19 @@ public class LinkedList implements ListIntf {
 
     @Override
     public Object get(int i) {
-        return null;
+        int j;
+        LNode p;
+        p = head.next;
+        j = 1;
+        while (p != null && j < i) {
+            p = p.next;
+            j++;
+        }
+        if (i == j) {
+            return p;
+        } else {
+            return null;
+        }
     }
 
     @Override
@@ -96,8 +108,41 @@ public class LinkedList implements ListIntf {
     }
 
     // 在单链表中第i个元素之前插入一个元素的算法
-    public int insertElementAt() {
-        return 0;
+    public int insertElementAt(int i, char x) {
+        LNode p, s;
+        int j = 0;
+        p = head;
+        while (p != null && j < i - 1) {    // 寻找第i-1号节点
+            p = p.next;
+            j++;
+        }
+        if (p != null) {
+            s = new LNode();
+            s.data = x;
+            s.next = p.next;
+            p.next = s;
+            return 1;
+        } else {
+            return 0;
+        }
+    }
+
+    public void remove(LNode p) {      // 删除单链表中某个节点的后继节点
+        LNode q;
+        if (p.next != null) {
+            q = p.next;
+            p.next = q.next;
+            q = null;
+        }
+    }
+
+    public LNode search(char x) {       // 单链表的按值查找
+        LNode p;
+        p = head.next;
+        while (p != null && p.data != x) {
+            p = p.next;
+        }
+        return p;
     }
 
     @Override
