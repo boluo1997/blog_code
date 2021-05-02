@@ -34,7 +34,7 @@ public class Lqueuetp implements QueueIntf {
         } else {
             p = front.next;
             front.next = p.next;
-            if(p.next == null) rear = front;
+            if (p.next == null) rear = front;
             x = p.data;
             p = null;
             return x;
