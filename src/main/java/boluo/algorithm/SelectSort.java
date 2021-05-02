@@ -1,4 +1,4 @@
-package algorithm;
+package boluo.algorithm;
 
 public class SelectSort {
 

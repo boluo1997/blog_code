@@ -1,4 +1,4 @@
-package dataStructure.stack;
+package boluo.datastructure.stack;
 
 public interface StackIntf {
 

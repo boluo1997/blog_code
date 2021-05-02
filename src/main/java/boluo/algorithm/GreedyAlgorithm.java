@@ -1,4 +1,4 @@
-package algorithm;
+package boluo.algorithm;
 
 import java.util.Arrays;
 import java.util.Comparator;

@@ -1,4 +1,4 @@
-package dataStructure.stack;
+package boluo.datastructure.stack;
 
 public class StackTest1 {
     public static void main(String[] args) {
@@ -10,7 +10,7 @@ public class StackTest1 {
      * 用初始十进制数除以2, 把余数记下来, 若商不为0, 用商除以2, 直到商为0
      */
     public static void conversion() {
-        Sqstacktp
+
     }
 
 }

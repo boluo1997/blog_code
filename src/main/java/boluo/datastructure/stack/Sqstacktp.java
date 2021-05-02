@@ -1,6 +1,6 @@
-package dataStructure.stack;
+package boluo.datastructure.stack;
 
-public class Sqstacktp implements StackIntf {
+public class Sqstacktp implements dataStructure.stack.StackIntf {
 
     final int maxSize = 100;
     int elem[] = new int[maxSize];
