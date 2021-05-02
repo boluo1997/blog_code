@@ -1,8 +1,6 @@
-package dataStructure.singleLinkedList;
+package boluo.datastructure.singlelinkedlist;
 
-import dataStructure.seqList.ListIntf;
-
-import java.io.IOException;
+import boluo.datastructure.seqlist.ListIntf;
 import java.util.Scanner;
 
 public class LinkedList implements ListIntf {

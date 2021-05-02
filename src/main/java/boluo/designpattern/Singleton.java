@@ -1,4 +1,4 @@
-package designPattern;
+package boluo.designpattern;
 
 /**
  * 单例模式:

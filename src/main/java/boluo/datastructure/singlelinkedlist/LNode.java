@@ -1,4 +1,4 @@
-package dataStructure.singleLinkedList;
+package boluo.datastructure.singlelinkedlist;
 
 public class LNode {
 

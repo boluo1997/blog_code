@@ -14,8 +14,8 @@ import org.junit.Assert;
 import org.junit.Test;
 import scala.Tuple2;
 import scala.Tuple3;
-import work.Func;
-import work.My;
+import boluo.work.Func;
+import boluo.work.My;
 
 import java.io.IOException;
 import java.time.LocalDate;
@@ -26,7 +26,7 @@ import static org.apache.spark.sql.functions.*;
 import static org.junit.Assert.assertEquals;
 import java.io.IOException;
 
-import static work.My.*;
+import static boluo.work.My.*;
 
 public class FuncTest {
 

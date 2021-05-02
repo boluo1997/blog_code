@@ -1,4 +1,4 @@
-package work;
+package boluo.work;
 
 /* SimpleApp.java */
 import com.fasterxml.jackson.databind.ObjectMapper;

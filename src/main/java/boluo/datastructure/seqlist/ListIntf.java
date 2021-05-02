@@ -1,4 +1,4 @@
-package dataStructure.seqList;
+package boluo.datastructure.seqlist;
 
 public interface ListIntf {
 

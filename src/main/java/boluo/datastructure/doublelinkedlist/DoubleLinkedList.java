@@ -1,4 +1,4 @@
-package dataStructure.doubleLinkedList;
+package boluo.datastructure.doublelinkedlist;
 
 public class DoubleLinkedList {
 

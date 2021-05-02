@@ -1,6 +1,4 @@
-package dataStructure.seqList;
-
-import dataStructure.seqList.ListIntf;
+package boluo.datastructure.seqlist;
 
 public class SqList implements ListIntf {
 

@@ -1,4 +1,4 @@
-package work;
+package boluo.work;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
