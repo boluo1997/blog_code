@@ -1,6 +1,7 @@
 package boluo.datastructure.singlelinkedlist;
 
 import boluo.datastructure.seqlist.ListIntf;
+
 import java.util.Scanner;
 
 public class LinkedList implements ListIntf {
@@ -151,5 +152,12 @@ public class LinkedList implements ListIntf {
     @Override
     public Object remove(Object obj) {
         return null;
+    }
+
+    class LNode {
+
+        public char data;
+        public LNode next;
+
     }
 }
