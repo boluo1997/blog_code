@@ -9,7 +9,7 @@ public class Squeuetp implements QueueIntf {
     public int front, rear;
 
     @Override
-    public void enQueue(Object obj) {
+    public void enQueue(int x) {
 
     }
 
