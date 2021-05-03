@@ -6,7 +6,7 @@ package boluo.datastructure.queue;
 public class Cqueuetp implements QueueIntf {
 
     @Override
-    public void enQueue(Object obj) {
+    public void enQueue(int x) {
 
     }
 
