@@ -71,6 +71,7 @@ public class My {
 
     private static final ObjectMapper mapper = new ObjectMapper();
     private static final Logger logger = LoggerFactory.getLogger(My.class);
+    // private final Logger logger = LoggerFactory.getLogger(getClass());
     private static final Cache<String, JsonNode> requestCache = CacheBuilder.newBuilder().build();
     private static final CloseableHttpClient http = HttpClients.createDefault();
 
