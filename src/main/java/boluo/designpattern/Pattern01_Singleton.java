@@ -9,7 +9,7 @@ public class Pattern01_Singleton {
     private static Pattern01_Singleton singleton;
 
     private Pattern01_Singleton() {
-        
+
     }
 
     public static Pattern01_Singleton getInstance() {
