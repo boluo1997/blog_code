@@ -4,7 +4,7 @@ import org.junit.Test;
 
 /**
  * 简单工厂模式
- * 不够灵活, 每次新增一个产品, 都要
+ * 不够灵活, 每次新增一个产品, 都要修改工厂类
  */
 public class Pattern02_SimpleFactory {
 
