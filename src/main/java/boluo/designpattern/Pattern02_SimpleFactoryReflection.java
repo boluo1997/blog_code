@@ -1,6 +1,7 @@
 package boluo.designpattern;
 
-import java.util.HashMap;
+import com.google.common.collect.Maps;
+
 import java.util.Map;
 
 /**
@@ -8,7 +9,7 @@ import java.util.Map;
  */
 public class Pattern02_SimpleFactoryReflection {
 
-    private static final Map<EnumProductType, Class> activityIdMap = new HashMap<>();
+    private static final Map<EnumProductType, Class> activityIdMap = Maps.newHashMap();
 
     public static void addProductKey(EnumProductType EnumProduct, Class product) {
         activityIdMap.put(EnumProduct, product);
