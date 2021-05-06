@@ -4,14 +4,15 @@ package boluo.designpattern;
  * 单例模式:
  * 确保一个类只有一个实例, 而且自行实例化并向整个系统提供这个实例
  */
-public class Singleton {
+public class Pattern01_Singleton {
 
-    private static Singleton singleton;
+    private static Pattern01_Singleton singleton;
 
-    private Singleton() {
+    private Pattern01_Singleton() {
+        
     }
 
-    public static Singleton getInstance() {
+    public static Pattern01_Singleton getInstance() {
         return singleton;
     }
 }
