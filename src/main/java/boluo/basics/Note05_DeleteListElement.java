@@ -8,7 +8,7 @@ import java.util.List;
 /**
  * 删除列表中所有偶数的元素
  */
-public class Note05_deleteListElement {
+public class Note05_DeleteListElement {
 
     public static void main(String[] args) {
         List<Integer> list = Lists.newArrayList();
