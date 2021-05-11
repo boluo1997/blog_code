@@ -218,6 +218,12 @@ public class My {
         }
     }
 
+    public static UserDefinedFunction answer2value = functions.udf((UDF1<String, String>) (String a) -> {
+        return mapper.writeValueAsString(answer2value(mapper.readTree(a)));
+    }, StringType$.MODULE$);
+
+    /******************************************************************************************************************/
+
     public static Column json2patch(String json) {
         return udf((UDF1<?, ?>) (String p) -> {
             ObjectNode patchNode = (ObjectNode) mapper.readTree(p);
