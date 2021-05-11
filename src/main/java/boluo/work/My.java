@@ -101,6 +101,24 @@ public class My {
         }, StringType$.MODULE$).apply(expr(json));
     }
 
+    public static Column jsonReplace(String a, String b, String path) {
+        return udf((UDF2<?, ?, ?>) (String jsonA, String jsonB) -> {
+
+            if (Objects.isNull(jsonB) || Objects.isNull(jsonA)) {
+                return jsonA;
+            }
+
+            ObjectNode objNodeA = (ObjectNode) mapper.readTree(jsonA);
+            JsonNode objNodeB = mapper.readTree(jsonB);
+
+            String pathStr = path.substring(1);
+            objNodeA.set(pathStr, objNodeB);
+
+            return objNodeA.toString();
+            //throw new UnsupportedOperationException();
+        }, StringType$.MODULE$).apply(expr(a), expr(b));
+    }
+
     public static Column patchFilter(String patch, String... retain) {
         return udf((UDF1<?, ?>) (String p) -> {
 
