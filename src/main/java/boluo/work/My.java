@@ -85,6 +85,22 @@ public class My {
                 .findFirst();
     }
 
+    public static Column json2patch(String json) {
+        return udf((UDF1<?, ?>) (String p) -> {
+            ObjectNode patchNode = (ObjectNode) mapper.readTree(p);
+            ArrayNode arrayNode = mapper.createArrayNode();
+            patchNode.fields().forEachRemaining(kv -> {
+                arrayNode.addObject()
+                        .put("op", "replace")
+                        .put("path", "/" + kv.getKey())
+                        .set("value", kv.getValue());
+            });
+
+            return arrayNode.toString();
+            //throw new UnsupportedOperationException();
+        }, StringType$.MODULE$).apply(expr(json));
+    }
+
     public static Column patchFilter(String patch, String... retain) {
         return udf((UDF1<?, ?>) (String p) -> {
 
