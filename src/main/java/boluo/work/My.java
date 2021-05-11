@@ -85,6 +85,139 @@ public class My {
                 .findFirst();
     }
 
+    private static String answer2key(JsonNode answer) {
+        int id = answer.at("/queId").intValue();
+        String title = answer.at("/queTitle").textValue();
+        Preconditions.checkArgument(id >= 0);
+        Preconditions.checkArgument(!Strings.isNullOrEmpty(title));
+        return title;
+    }
+
+    public static JsonNode answer2value(JsonNode answer) {
+        if (answer.isNull()) {
+            return MissingNode.getInstance();
+        } else if (answer.isArray()) {
+            ObjectNode r = mapper.createObjectNode();
+            Streams.stream(answer).forEach(i -> {
+                r.set(answer2key(i), answer2value(i));
+            });
+            return r;
+        }
+
+        int type = answer.at("/queType").intValue();
+        JsonNode values = answer.at("/values");
+        switch (type) {
+            case 1:/*描述文字*/
+            case 2:/*单行文字*/
+            case 3:/*多行文字*/
+            case 4:/*时间*/
+            case 6:/*邮箱*/
+            case 7:/*手机*/
+            case 9:/*链接*/
+            case 10:/*单选*/
+            case 11:/*下拉选择*/
+            case 16:/*富文本*/
+            case 19:/*数据关联*/ {
+                Preconditions.checkArgument(answer.at("/values").size() == 1, answer);
+                JsonNode v = answer.at("/values/0/value");
+                Preconditions.checkArgument(v.isTextual());
+                return v;
+            }
+            case 12:/*多选*/
+            case 13:/*上传附件*/
+            case 15:/*图片选择*/
+            case 21:/*地址*/ {
+                ArrayNode r = mapper.createArrayNode();
+                Streams.stream(answer.at("/values"))
+                        .map(i -> {
+                            JsonNode v = i.at("/value");
+                            Preconditions.checkArgument(v.isTextual());
+                            return v;
+                        })
+                        .forEach(r::add);
+                return r;
+            }
+            case 8: {
+                // 数字
+                Preconditions.checkArgument(values.size() == 1, answer);
+                JsonNode v = answer.at("/values/0/value");
+                Preconditions.checkArgument(v.isTextual());
+                try {
+                    // 整数
+                    BigInteger integer = new BigInteger(v.textValue());
+                    return LongNode.valueOf(integer.longValue());
+                } catch (NumberFormatException ignored) {
+                }
+                try {
+                    // 分数
+                    BigDecimal f = new BigDecimal(v.textValue());
+                    return DecimalNode.valueOf(f);
+                } catch (NumberFormatException ignored) {
+                }
+                if (v.textValue().length() == 0) {
+                    return NullNode.getInstance();
+                }
+                int queId = answer.at("/queId").intValue();
+                if (queId == 0) {
+                    // 编号允许是字符串
+                    return v;
+                }
+                return v;
+            }
+            case 5: {
+                // 人
+                ArrayNode res = mapper.createArrayNode();
+                Streams.stream(values)
+                        .map(v -> {
+                            int uid = v.at("/id").intValue();
+                            Preconditions.checkArgument(uid > 0, "missing id");
+                            String name = v.at("/value").textValue();
+                            String email = v.at("/email").textValue();
+                            String otherInfo = v.at("/otherInfo").textValue();
+                            return mapper.createObjectNode()
+                                    .put("uid", uid)
+                                    .put("name", name)
+                                    .put("email", email)
+                                    .put("head", otherInfo);
+                        })
+                        .forEach(res::add);
+                return res;
+            }
+            case 22:/*部门*/ {
+                ArrayNode res = mapper.createArrayNode();
+                Streams.stream(values)
+                        .map(i -> {
+                            int id = i.at("/id").intValue();
+                            Preconditions.checkArgument(id > 0, "missing id");
+                            String name = i.at("/value").textValue();
+                            return mapper.createObjectNode()
+                                    .put("id", id)
+                                    .put("name", name);
+                        })
+                        .forEach(res::add);
+                return res;
+            }
+            case 14: /*起止时间*/ {
+                Preconditions.checkArgument(values.size() == 1, answer);
+                JsonNode v = answer.at("/values/0/value");
+                Preconditions.checkArgument(v.isTextual());
+                String[] value_ = v.textValue().split("~");
+                ArrayNode res = mapper.createArrayNode();
+                Arrays.stream(value_).forEach(res::add);
+                return res;
+            }
+            case 18: {
+                // 表格
+                ArrayNode res = mapper.createArrayNode();
+                answer.at("/tableValues")
+                        .forEach(i -> res.add(answer2value(i)));
+                return res;
+            }
+            default:
+                throw new UnsupportedOperationException(String.format("%d:%s", type, answer));
+        }
+    }
+
     public static Column json2patch(String json) {
         return udf((UDF1<?, ?>) (String p) -> {
             ObjectNode patchNode = (ObjectNode) mapper.readTree(p);
