@@ -512,7 +512,7 @@ public class My {
 
                 List<Row> result = Lists.newArrayList();
                 List<Row> bufferList = buffer.getList(0);
-                
+
                 for (int k = 0; k < bufferList.size(); k++) {
                     Row bufferListItem = bufferList.get(k);
                     Row currType = bufferListItem.getAs(0);
@@ -610,7 +610,7 @@ public class My {
         }.apply(expr(instantTime), expr(income), expr(subject), expr(fixedAmount),
                 expr(noLiquidRate), expr(liquidRate), expr(endDate));
     }
-    
+
     public static Column 阶梯分成(String instantTime, String income, String subject,
                               String rate2, String liquidRate) {
 
@@ -788,5 +788,249 @@ public class My {
         }.apply(expr(instantTime), expr(income), expr(subject),
                 expr(rate2), expr(liquidRate));
     }
+
+    // 将分摊分成和阶梯分成整合到一个函数中
+    public static Column avgAmount(String instantTime, String income, String subject, String fixedAmount,
+                                   String noLiquidRate, String liquidRate, String startDate, String endDate) {
+        return new UserDefinedAggregateFunction() {
+
+            private int IDX_TOTALAMOUNT = 0;
+            private int IDX_TOTALDAYS = 1;
+            private int IDX_NOLIQUIDRATE = 2;
+            private int IDX_LIQUIDRATE = 3;
+            private int IDX_PREVIOUSNOLIQUIDSUM = 4;
+            private int IDX_PREVIOUSLIQUIDSUM = 5;
+            private int IDX_OUTAMOUNT = 6;
+            private int IDX_PREVIOUSRATESUM = 7;
+            private int IDX_WHICHDAY = 8;
+            private int IDX_WHICHDATE = 9;
+
+            private static final int IDX_INPUT_DATE = 0;
+            private static final int IDX_INPUT_INCOME = 1;
+            private static final int IDX_INPUT_SUBJECT = 2;
+            private static final int IDX_INPUT_FIXEDAMOUNT = 3;
+            private static final int IDX_INPUT_NOLIQUID = 4;
+            private static final int IDX_INPUT_LIQUID = 5;
+            private static final int IDX_INPUT_STARTDATE = 6;
+            private static final int IDX_INPUT_ENDDATE = 7;
+
+
+            @Override
+            public StructType inputSchema() {
+                return new StructType()
+                        .add("date", "timestamp")
+                        .add("收入", "long")
+                        .add("科目", "string")
+                        .add("固定金额", "long")
+                        .add("非加液分成比例", "array<struct<k:double,a:bigint>>")
+                        .add("加液分成比例", "double")
+                        .add("开始时间", "timestamp")
+                        .add("结束时间", "timestamp")
+                        ;
+            }
+
+            @Override
+            public StructType bufferSchema() {
+                StructType aType = new StructType()
+                        .add("totalAmount", "long")            // a 固定总金额 0
+                        .add("totalDays", "int")                // d 总天数 1
+                        .add("noLiquidRate", "array<struct<k:double,a:bigint>>") // k 非加液利率 2
+                        .add("liquidRate", "double")            // q 加液利率 3
+                        .add("previousNoLiquidSum", "long")    // San	上一天非加液收入总和 4
+                        .add("previousLiquidSum", "long")    // Sbn  上一天非加液收入总和 5
+                        .add("outAmount", "long")            // Sxn  上一天固定收入的支出总和 6
+                        .add("previousRateSum", "long")        // Syn  上一天利率收入的支出总和 7
+                        .add("whichDay", "int")                // n 执行到第几天的标志 8
+                        .add("whichDate", "date")            // date  日期 9
+                        ;
+                return new StructType()
+                        .add("curr", aType)
+                        .add("next", aType);
+            }
+
+            @Override
+            public DataType dataType() {
+                return ArrayType.apply(new StructType()
+                        .add("date", "date")
+                        .add("amount", "long"));
+            }
+
+            @Override
+            public boolean deterministic() {
+                return false;
+            }
+
+            @Override
+            public void initialize(MutableAggregationBuffer buffer) {
+
+                Row row = RowFactory.create(0L, 0, null, 0.0, 0L, 0L, 0L, 0L, 0, null);
+                buffer.update(0, row);
+                buffer.update(1, row);
+            }
+
+            @Override
+            public void update(MutableAggregationBuffer buffer, Row input) {
+
+                buffer.update(0, buffer.get(1));
+
+                Timestamp currLineDate = input.getAs(IDX_INPUT_DATE);
+                Long income = input.getAs(IDX_INPUT_INCOME);
+                String subject = input.getAs(IDX_INPUT_SUBJECT);
+                Long nextSum = input.getAs(IDX_INPUT_FIXEDAMOUNT);
+                WrappedArray<Row> nextNoLiquidRate = input.getAs(IDX_INPUT_NOLIQUID);
+                Double nextLiquidRate = input.getAs(IDX_INPUT_LIQUID);
+                Timestamp startDate = input.getAs(IDX_INPUT_STARTDATE);
+                Timestamp endDate = input.getAs(IDX_INPUT_ENDDATE);
+                int days = (int) startDate.toLocalDateTime().until(endDate.toLocalDateTime(), ChronoUnit.DAYS);
+                Date date2 = new Date(currLineDate.getTime());
+
+                if (Objects.isNull(nextNoLiquidRate)) {
+                    nextNoLiquidRate = WrappedArray.empty();
+                }
+
+                nextSum = MoreObjects.firstNonNull(nextSum, 0L);
+                nextLiquidRate = MoreObjects.firstNonNull(nextLiquidRate, 0.0);
+
+                Row currType = buffer.getAs(0);
+
+                // 四个定值 总金额、总天数、加液利率、非加液利率
+                double liquidRate = currType.getAs(IDX_LIQUIDRATE);                    // 加液利率		q
+                long preNoLiquidSum = currType.getAs(IDX_PREVIOUSNOLIQUIDSUM);        // 上一天非加液收入总和	San
+                long preLiquidSum = currType.getAs(IDX_PREVIOUSLIQUIDSUM);            // 上一天加液收入总和		Sbn
+                long outAmount = currType.getAs(IDX_OUTAMOUNT);                        // 上一天固定收入的支出总和	Sxn
+                long preRateSum = currType.getAs(IDX_PREVIOUSRATESUM);                // 上一天固定收入的支出总和	Syn
+                int n = currType.getAs(IDX_WHICHDAY);                                // n1
+                Date date1 = currType.getAs(IDX_WHICHDATE);                            // date1
+
+                if (Objects.isNull(date1)) {
+                    date1 = Date.valueOf(startDate.toLocalDateTime().toLocalDate());
+                    Row tempRow = RowFactory.create(nextSum, days, nextNoLiquidRate, nextLiquidRate, 0L, 0L, 0L, 0L, 0, date1);
+                    buffer.update(0, tempRow);
+                }
+
+                long differDays = date1.toLocalDate().until(date2.toLocalDate(), ChronoUnit.DAYS);
+                int n2 = n + (int) differDays;
+
+                long liquidIncome = 0L;
+                long noLiquidIncome = 0L;
+                long income1 = MoreObjects.firstNonNull(income, 0L);
+
+                if (Strings.isNullOrEmpty(subject)) {
+                    logger.warn("科目为空!!!");
+                } else if (subject.equals("主营业务收入.收入.加液") || subject.equals("主营业务收入.退款.加液")) {
+                    liquidIncome = income1;
+                } else {
+                    noLiquidIncome = income1;
+                }
+
+                for (int i = n; i < n2; i++) {
+
+                    outAmount = fixedAmount(i + 1, days, nextSum) - fixedAmount(i, days, nextSum);
+                    long res2 = shareSum(preLiquidSum, liquidRate, preNoLiquidSum, nextNoLiquidRate) - preRateSum;
+                    preRateSum += res2;
+                }
+
+                preNoLiquidSum += noLiquidIncome;        // San`
+                preLiquidSum += liquidIncome;            // Sbn`
+
+                Row nextRow = RowFactory.create(nextSum, days, nextNoLiquidRate, nextLiquidRate, preNoLiquidSum,
+                        preLiquidSum, outAmount, preRateSum, n2, date2);
+
+                buffer.update(1, nextRow);
+            }
+
+            @Override
+            public void merge(MutableAggregationBuffer buffer1, Row buffer2) {
+
+            }
+
+            @Override
+            public Object evaluate(Row buffer) {
+
+                Row currType = buffer.getAs(0);
+                Row nextType = buffer.getAs(1);
+
+                // 四个定值 总金额、总天数、加液利率、非加液利率
+                long sum = currType.getAs(IDX_TOTALAMOUNT);                            // 固定总金额		a
+                int days = currType.getAs(IDX_TOTALDAYS);                            // 总天数		d
+                WrappedArray<Row> noLiquidRate = currType.getAs(IDX_NOLIQUIDRATE);        // 非加液利率		k
+                double liquidRate = currType.getAs(IDX_LIQUIDRATE);                    // 加液利率		q
+                long preNoLiquidSum = currType.getAs(IDX_PREVIOUSNOLIQUIDSUM);        // 上一天非加液收入总和	San
+                long preLiquidSum = currType.getAs(IDX_PREVIOUSLIQUIDSUM);            // 上一天加液收入总和		Sbn
+                long outAmount = currType.getAs(IDX_OUTAMOUNT);                        // 上一天固定收入的支出总和	Sxn
+                long preRateSum = currType.getAs(IDX_PREVIOUSRATESUM);                // 上一天固定收入的支出总和	Syn
+                int n = currType.getAs(IDX_WHICHDAY);                                // n1
+                Date date1 = currType.getAs(IDX_WHICHDATE);                            // date1
+                int n2 = nextType.getAs(IDX_WHICHDAY);                                // n2
+
+                List<Row> result = Lists.newArrayList();
+                for (int i = n; i < n2; i++) {
+
+                    LocalDate date = date1.toLocalDate().plusDays(i - n);
+
+                    long res1 = fixedAmount(i + 1, days, sum) - fixedAmount(i, days, sum);
+                    long res2 = 0L;
+                    if (i == n) {
+                        res2 = shareSum(preLiquidSum, liquidRate, preNoLiquidSum, noLiquidRate) - preRateSum;
+                    }
+
+                    if (preRateSum + res2 < sum) {
+                        if (res1 == 0) continue;
+                        result.add(RowFactory.create(Date.valueOf(date), res1));
+                    } else if (preRateSum > sum) {
+                        if (res2 == 0) continue;
+                        result.add(RowFactory.create(Date.valueOf(date), res2));
+                    } else {
+                        long res = preRateSum + res2 - fixedAmount(i, days, sum);
+                        if (res == 0) continue;
+                        result.add(RowFactory.create(Date.valueOf(date), res));
+                    }
+                    // preRateSum += res2;
+                }
+
+                Iterator<Row> it = new Iterator<Row>() {
+
+
+                    @Override
+                    public boolean hasNext() {
+                        return false;
+                    }
+
+                    @Override
+                    public Row next() {
+                        return null;
+                    }
+                };
+
+                return JavaConverters.asScalaIteratorConverter(result.iterator()).asScala().toSeq();
+            }
+
+            private long fixedAmount(int day, int days, long sum) {
+                if (day < 0) {
+                    return 0L;
+                }
+                long res1 = Math.round(1.0 * sum / days * day);
+                return res1;
+            }
+
+            private long shareSum(long liquidIncome, double liquidRate, long noLiquidIncome, WrappedArray<Row> noLiquidRate) {
+                double liquid = liquidIncome * liquidRate;
+                double noliquid = 0.0;
+                double preK = 0;
+                // 专门计算非加液的阶梯分成部分金额
+                for (int j = 0; j < noLiquidRate.size(); j++) {
+                    Row row = noLiquidRate.apply(j);
+                    double k = row.getAs(0);
+                    long a = row.getAs(1);
+                    noliquid += Math.max(0, noLiquidIncome - a) * (k - preK);
+                    preK = k;
+                }
+                return Math.round(liquid + noliquid);
+            }
+
+        }.apply(expr(instantTime), expr(income), expr(subject), expr(fixedAmount),
+                expr(noLiquidRate), expr(liquidRate), expr(startDate), expr(endDate));
+    }
+
 
 }

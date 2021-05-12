@@ -23,6 +23,7 @@ import java.util.List;
 
 import static org.apache.spark.sql.functions.*;
 import static org.junit.Assert.assertEquals;
+
 import java.io.IOException;
 
 import static boluo.work.My.*;
@@ -234,7 +235,6 @@ public class FuncTest {
     }
 
 
-
     @Test
     public void fengtanTest3() {
         Dataset<Row> src = spark.createDataset(ImmutableList.of(
@@ -315,7 +315,7 @@ public class FuncTest {
     }
 
     @Test
-    public void fengtanTest4() {
+    public void fentanTest4() {
         Dataset<Tuple3<String, String, Long>> ds = spark.createDataset(ImmutableList.of(
                 Tuple3.apply("2020-04-01 07:00", null, null),
                 Tuple3.apply("2020-04-01 08:00", "主营业务收入.收入.加液", 2L),
@@ -340,5 +340,103 @@ public class FuncTest {
         assertEquals(0L, df.where("date='2020-04-04'").first().getLong(1));
         assertEquals(3L, df.where("date='2020-04-06'").first().getLong(1));
         assertEquals(2L, df.where("date='2020-04-07'").first().getLong(1));
+    }
+
+    @Test
+    public void avgAmountTest() {
+        Dataset<Row> src = spark.createDataset(ImmutableList.of(
+                RowFactory.create("2020-04-02 07:00", "主营业务收入.收入.加液", 2L),
+                RowFactory.create("2020-04-02 08:00", "主营业务收入.收入.加液", 2L),
+                RowFactory.create("2020-04-03 08:00", "主营业务收入.收入.X", 4L),
+                RowFactory.create("2020-04-05 16:00", "主营业务收入.收入.X", 4L),
+                RowFactory.create("2020-04-06 08:00", "主营业务收入.收入.加液", 4L),
+                RowFactory.create("2020-04-06 09:00", "主营业务收入.收入.加液", 2L)
+        ), RowEncoder.apply(new StructType()
+                .add("ts", "string")
+                .add("科目", "string")
+                .add("金额", "long")));
+        Dataset<Row> df;
+
+        df = src
+                .union(spark.sql("select '2020-04-09 07:00',null,null"))
+                .withColumn("ex", My.avgAmount(
+                        "timestamp(ts)", "`金额`", "`科目`",
+                        "10", "null", "null",
+                        "timestamp('2020-04-01 07:00')",
+                        "timestamp('2020-04-09 07:00')").over(Window.orderBy("ts")))
+                .selectExpr("explode(ex) ex")
+                .selectExpr("ex.*");
+        assertEquals(8, df.count());
+        assertEquals(10L, df.agg(sum("amount")).first().getLong(0));
+        assertEquals(2L, df.where("date='2020-04-02'").first().getLong(1));
+        assertEquals(2L, df.where("date='2020-04-06'").first().getLong(1));
+
+        df = src
+                .union(spark.sql("select '2020-04-09 07:00',null,null"))
+                .withColumn("ex", My.avgAmount(
+                        "timestamp(ts)", "`金额`", "`科目`",
+                        "null", "array(struct(0.4d k,0l a))", "0.8",
+                        "timestamp('2020-04-01 07:00')",
+                        "timestamp('2020-04-09 07:00')").over(Window.orderBy("ts")))
+                .selectExpr("explode(ex) ex")
+                .selectExpr("ex.*");
+        assertEquals(4, df.count());
+        assertEquals(11L, df.agg(sum("amount")).first().getLong(0));
+        assertEquals(3L, df.where("date='2020-04-02'").first().getLong(1));
+        assertEquals(2L, df.where("date='2020-04-03'").first().getLong(1));
+        assertEquals(1L, df.where("date='2020-04-05'").first().getLong(1));
+        assertEquals(5L, df.where("date='2020-04-06'").first().getLong(1));
+
+        // 开始时间正好一样
+        df = src
+                .union(spark.sql("select '2020-04-09 07:00',null,null"))
+                .withColumn("ex", My.avgAmount(
+                        "timestamp(ts)", "`金额`", "`科目`",
+                        "null", "array(struct(0.4d k,0l a))", "0.8",
+                        "timestamp('2020-04-02 07:00')",
+                        "timestamp('2020-04-09 07:00')").over(Window.orderBy("ts")))
+                .selectExpr("explode(ex) ex")
+                .selectExpr("ex.*");
+        assertEquals(4, df.count());
+        assertEquals(11L, df.agg(sum("amount")).first().getLong(0));
+        assertEquals(3L, df.where("date='2020-04-02'").first().getLong(1));
+        assertEquals(2L, df.where("date='2020-04-03'").first().getLong(1));
+        assertEquals(1L, df.where("date='2020-04-05'").first().getLong(1));
+        assertEquals(5L, df.where("date='2020-04-06'").first().getLong(1));
+
+        df = src
+                .union(spark.sql("select '2020-04-09 07:00',null,null"))
+                .withColumn("ex", My.avgAmount(
+                        "timestamp(ts)", "`金额`", "`科目`",
+                        "4", "array(struct(0.4d k,0l a))", "0.8",
+                        "timestamp('2020-04-01 07:00')",
+                        "timestamp('2020-04-09 07:00')").over(Window.orderBy("ts")))
+                .selectExpr("explode(ex) ex")
+                .selectExpr("ex.*");
+        assertEquals(4, df.count());
+        assertEquals(11L, df.agg(sum("amount")).first().getLong(0));
+        assertEquals(1L, df.where("date='2020-04-01'").first().getLong(1));
+        assertEquals(4L, df.where("date='2020-04-03'").first().getLong(1));
+        assertEquals(1L, df.where("date='2020-04-05'").first().getLong(1));
+        assertEquals(5L, df.where("date='2020-04-06'").first().getLong(1));
+
+        // 阶梯分成
+        df = src
+                .union(spark.sql("select '2020-04-09 07:00',null,null"))
+                .withColumn("ex", My.avgAmount(
+                        "timestamp(ts)", "`金额`", "`科目`",
+                        "null",
+                        "array(struct(0.5d k,0l a),struct(0.6d k,4l a),struct(0.7d k,6l a))",
+                        "0.8",
+                        "timestamp('2020-04-01 07:00')",
+                        "timestamp('2020-04-09 07:00')").over(Window.orderBy("ts")))
+                .selectExpr("explode(ex) ex")
+                .selectExpr("ex.*");
+        assertEquals(4, df.count());
+        assertEquals(13L, df.agg(sum("amount")).first().getLong(0));
+        assertEquals(3L, df.where("date='2020-04-02'").first().getLong(1));
+        assertEquals(2L, df.where("date='2020-04-03'").first().getLong(1));
+        assertEquals(3L, df.where("date='2020-04-05'").first().getLong(1));
+        assertEquals(5L, df.where("date='2020-04-06'").first().getLong(1));
     }
 }
