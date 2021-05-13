@@ -168,6 +168,28 @@ public class FuncTest {
     }
 
     @Test
+    public void mergeTest1() {
+        Dataset<Row> ds = spark.createDataset(ImmutableList.of(
+                Tuple2.apply("a1", 1),
+                Tuple2.apply("a2", null),
+                Tuple2.apply(null, 2)
+        ), Encoders.tuple(Encoders.STRING(), Encoders.INT())).toDF()
+                .selectExpr("struct(_1,_2) a")
+                .withColumn("id", monotonically_increasing_id());
+
+        ds.show(false);
+        List<Row> result = ds
+                .select(merge("a", ds.select("a.*").schema()).over(Window.orderBy("id")).as("a"))
+                .selectExpr("a.*")
+                .collectAsList();
+        System.out.println(result);
+        Assert.assertEquals("a2", result.get(1).apply(0));
+        Assert.assertEquals(1, result.get(1).apply(1));
+        Assert.assertEquals("a2", result.get(2).apply(0));
+        Assert.assertEquals(2, result.get(2).apply(1));
+    }
+
+    @Test
     public void fengtanErrorTest3() {
         Dataset<Row> src = spark.createDataset(ImmutableList.of(
                 RowFactory.create("2019-12-30 08:00", "主营业务收入.收入.加液", 2L, null, null, null, null),
