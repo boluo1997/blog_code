@@ -963,33 +963,29 @@ public class My {
                 Date date1 = currType.getAs(IDX_WHICHDATE);                            // date1
                 int n2 = nextType.getAs(IDX_WHICHDAY);                                // n2
 
-                List<Row> result = Lists.newArrayList();
-                for (int i = n; i < n2; i++) {
-
-                    LocalDate date = date1.toLocalDate().plusDays(i - n);
-
-                    long res1 = fixedAmount(i + 1, days, sum) - fixedAmount(i, days, sum);
-                    long res2 = 0L;
-                    if (i == n) {
-                        res2 = shareSum(preLiquidSum, liquidRate, preNoLiquidSum, noLiquidRate) - preRateSum;
-                    }
-
-                    if (preRateSum + res2 < sum) {
-                        if (res1 == 0) continue;
-                        result.add(RowFactory.create(Date.valueOf(date), res1));
-                    } else if (preRateSum > sum) {
-                        if (res2 == 0) continue;
-                        result.add(RowFactory.create(Date.valueOf(date), res2));
-                    } else {
-                        long res = preRateSum + res2 - fixedAmount(i, days, sum);
-                        if (res == 0) continue;
-                        result.add(RowFactory.create(Date.valueOf(date), res));
-                    }
-                    // preRateSum += res2;
-                }
+                Stream<Row> stream = Stream.iterate(n, i -> ++i)
+                        .limit(n2 - n)
+                        .flatMap((Integer i) -> {
+                            LocalDate date = date1.toLocalDate().plusDays(i - n);
+                            long res1 = fixedAmount(i + 1, days, sum) - fixedAmount(i, days, sum);
+                            long res2 = 0L;
+                            if (i == n) {
+                                res2 = shareSum(preLiquidSum, liquidRate, preNoLiquidSum, noLiquidRate) - preRateSum;
+                            }
+                            if (preRateSum + res2 < sum) {
+                                if (res1 == 0) return Stream.of();
+                                return Stream.of(RowFactory.create(Date.valueOf(date), res1));
+                            } else if (preRateSum > sum) {
+                                if (res2 == 0) return Stream.of();
+                                return Stream.of(RowFactory.create(Date.valueOf(date), res2));
+                            } else {
+                                long res = preRateSum + res2 - fixedAmount(i, days, sum);
+                                if (res == 0) return Stream.of();
+                                return Stream.of(RowFactory.create(Date.valueOf(date), res));
+                            }
+                        });
 
                 Iterator<Row> it = new Iterator<Row>() {
-
 
                     @Override
                     public boolean hasNext() {
@@ -1002,7 +998,7 @@ public class My {
                     }
                 };
 
-                return JavaConverters.asScalaIteratorConverter(result.iterator()).asScala().toSeq();
+                return JavaConverters.asScalaIteratorConverter(stream.iterator()).asScala().toSeq();
             }
 
             private long fixedAmount(int day, int days, long sum) {
