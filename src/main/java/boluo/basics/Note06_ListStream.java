@@ -1,11 +1,10 @@
 package boluo.basics;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -69,6 +68,21 @@ public class Note06_ListStream {
                 .flatMap(Collection::stream)
                 .collect(Collectors.toList());
     }
+
+    public void func4() {
+
+        Map<String, Long> map = Maps.newHashMap();
+        map.put("boluo", 20L);
+        map.put("qidai", 40L);
+        map.put("dingc", 30L);
+
+        Preconditions.checkArgument(map.values().stream().mapToLong(i -> i * 2).sum() == 180L,
+                "数据不同!!!");
+
+        List<Long> age = map.values().stream().map(i -> i * 2).collect(Collectors.toList());
+        System.out.println(age);
+    }
+
 
     private static class User {
         String name;
