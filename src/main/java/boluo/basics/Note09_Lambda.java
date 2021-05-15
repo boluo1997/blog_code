@@ -45,6 +45,7 @@ public class Note09_Lambda {
 
         // Predicate 一个入参, 返回Boolean
 
+
     }
 
 
