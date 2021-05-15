@@ -2,6 +2,11 @@ package boluo.basics;
 
 import org.junit.Test;
 
+import java.util.function.BiFunction;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Supplier;
+
 public class Note09_Lambda {
 
     /**
@@ -24,6 +29,23 @@ public class Note09_Lambda {
 
     // 我们使用lambda的时候, 并不关心接口名, 方法名, 参数名
     // 只关注他的参数类型, 参数个数, 返回值
+
+    @Test
+    public void func2(){
+        // Consumer 一个入参, 无返回值
+        Consumer<String> consumer = s -> System.out.println(s);
+        consumer.accept("boluo");
+
+        // Supplier 无入参, 有返回值
+        Supplier supplier = () -> "boluo";
+        String s = (String) supplier.get();
+        System.out.println(s);
+
+        // Function 一个入参, 一个返回值
+
+        // Predicate 一个入参, 返回Boolean
+
+    }
 
 
 }
