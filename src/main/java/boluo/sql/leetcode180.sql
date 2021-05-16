@@ -67,6 +67,20 @@ from (
 group by (id-rownum), num
 having count(*) >= 3
 
+-- id可能为0或不连续, 所以我们可以自己构造一个id2来达到单调且连续的效果
+row_number() over(order by id) id2
+
+-- 结果为:
+select distinct num ConsecutiveNums
+from (
+    select *,
+    row_number() over(partition by num order by id) rownum,
+    row_number() over(order by id) id
+    from logs
+) t
+group by (id2-rownum), num
+having count(*) >= 3
+
 
 
 
