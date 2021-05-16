@@ -12,7 +12,7 @@ public class boluoTest {
     private static final Logger logger = LoggerFactory.getLogger(boluoTest.class);
 
     @Test
-    public void func1(){
+    public void func1() {
         int areaType = 3;
         if (Note02_Enum.PREFECTURE.eq(areaType)) {
 
@@ -20,7 +20,19 @@ public class boluoTest {
             Note03_ThreadPoolManager.run(() -> {
                 // do something
             });
-
         }
+    }
+
+    @Test
+    public void func2() {
+
+        Integer in1 = 10;
+        Integer in2 = 10;
+        Integer in3 = 200;
+        Integer in4 = 200;
+
+        System.out.println(in1 == in2);
+        System.out.println(in3 == in4);
+        System.out.println(in3.equals(in4));
     }
 }
