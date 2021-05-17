@@ -12,6 +12,8 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import boluo.basics.Note06_ListStream.User;
+
 /**
  * Stream
  */
@@ -81,6 +83,56 @@ public class Note07_Stream {
 
         String str = Stream.generate(() -> "?").limit(5).collect(Collectors.joining(","));
         System.out.println(str);
+    }
+
+    @Test
+    public void func5() {
+
+        List<User> list = Lists.newArrayList();
+
+        list.add(new User("boluo", 20));
+        list.add(new User("qidai", 40));
+        list.add(new User("dingc", 30));
+        System.out.println(list);
+
+        // filter
+        List<User> list2 = list.stream()
+                .filter(user -> {
+                    return user.age > 20;
+                }).collect(Collectors.toList());
+        System.out.println(list2);
+
+        // map
+        List<Integer> list3 = list.stream()
+                .map(user -> {
+                    return user.age += 5;
+                }).collect(Collectors.toList());
+        System.out.println(list3);
+
+        // mapToInt
+        Integer sumAge = list3.stream().mapToInt(i -> i - 5).sum();
+        System.out.println(sumAge);
+
+        // sorted
+        List<User> list4 = list.stream().sorted((a, b) -> {
+            return a.getAge() - b.getAge();
+        }).collect(Collectors.toList());
+        System.out.println(list4);
+
+        // forEach
+
+        // Optional min(Comparator comparator)
+
+        // anyMatch
+        boolean br = list.stream().anyMatch(user -> {
+            return user.getAge() == 25;
+        });
+        System.out.println(br);
+
+        // distinct
+        list3.add(25);
+        List<Integer> list5 = list3.stream().distinct().collect(Collectors.toList());
+        System.out.println(list5);
     }
 
 }

@@ -84,7 +84,7 @@ public class Note06_ListStream {
     }
 
 
-    private static class User {
+    public static class User {
         String name;
         int age;
 
