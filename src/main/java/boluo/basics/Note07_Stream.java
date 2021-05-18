@@ -1,12 +1,14 @@
 package boluo.basics;
 
 import com.clearspring.analytics.util.Lists;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
 import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.IntSupplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -133,6 +135,87 @@ public class Note07_Stream {
         list3.add(25);
         List<Integer> list5 = list3.stream().distinct().collect(Collectors.toList());
         System.out.println(list5);
+    }
+
+    @Test
+    public void func6() {
+        // 缩减操作
+        // 最终将流缩减为一个值的终端操作, 称之为缩减操作. 上例中提到的 min(), max()方法返回的流中的最小或最大值,
+        // 这两个方法属于特例缩减操作. 而通用的缩减操作就是指的 reduce()方法
+
+        List<Integer> list = Arrays.asList(1, 2, 3, 4, 5, 6);
+        Optional<Integer> count = list.stream().reduce((a, b) -> (a + b));
+        System.out.println(count.get());
+
+
+        Integer count1 = list.stream().reduce(2, (a, b) -> (a * b));
+        System.out.println(count1);
+    }
+
+    @Test
+    public void func7() {
+        // 之前两种签名返回的数据只能和Stream流中的元素类型一致, 第三种可以不一致
+        List<Integer> list = Arrays.asList(Integer.MAX_VALUE, Integer.MAX_VALUE);
+        long count = list.stream().reduce(0L, (a, b) -> (a + b), (a, b) -> 0L);
+        System.out.println(count);
+
+        // 总的来说, 缩减操作有两个特点, 一是只返回一个值, 二是它是一个终端操作.
+    }
+
+    @Test
+    public void func8() {
+        List<Student> list1 = Lists.newArrayList();
+        list1.add(new Student("boluo", ImmutableList.of(66.6, 77.7, 88.8)));
+        list1.add(new Student("dingc", ImmutableList.of(88.8, 99.9)));
+        list1.add(new Student("qidai", ImmutableList.of(99.9, 100.0)));
+        // 映射, 将一个集合转换成另外一个对象的集合.
+        // 映射操作主要是将一个Stream流转换成另外一个对象的Stream流或者将一个Stream流中符合条件的元素放到一个新的Stream流中
+
+        // flatMap() 把原始流中的元素进行一对多的转换, 并且将新生成的元素全部合并到它返回的流中
+        List<Double> list2 = list1.stream()
+                .flatMap(one -> one.getScore().stream().distinct())
+                .collect(Collectors.toList());
+        System.out.println(list2);
+    }
+
+    @Test
+    public void func9() {
+        // 收集操作 Collector是一个收集器, 指定收集过程如何执行, collect()是一个终端方法
+        // 使用收集操作将List转成Map
+        List<Student> list = Lists.newArrayList();
+        list.add(new Student("boluo", ImmutableList.of(99.9, 77.7, 88.8)));
+        list.add(new Student("dingc", ImmutableList.of(66.9, 88.8)));
+        list.add(new Student("qidai", ImmutableList.of(99.9, 100.0)));
+
+        Map<String, List<Double>> map = list.stream()
+                .collect(Collectors.toMap(one -> one.getName(), Student::getScore));
+        System.out.println(map);
+    }
+
+    class Student {
+        private String name;
+        private List<Double> score;
+
+        public Student(String name, List<Double> score) {
+            this.name = name;
+            this.score = score;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        public List<Double> getScore() {
+            return score;
+        }
+
+        public void setScore(List<Double> score) {
+            this.score = score;
+        }
     }
 
 }
