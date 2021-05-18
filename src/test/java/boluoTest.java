@@ -35,4 +35,17 @@ public class boluoTest {
         System.out.println(in3 == in4);
         System.out.println(in3.equals(in4));
     }
+
+    @Test
+    public void func3() {
+        int a = 7;
+        int b = 8;
+        int c = 9;
+
+        // a & 1 = 1, 则a为奇数
+        System.out.println(a & 1);
+        System.out.println(b & 1);
+        System.out.println(c & 1);
+
+    }
 }
