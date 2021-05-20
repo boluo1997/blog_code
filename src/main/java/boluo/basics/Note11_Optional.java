@@ -26,10 +26,14 @@ public class Note11_Optional {
 
         Predicate<String> len6 = pwd -> pwd.length() > 6;
         Predicate<String> len10 = pwd -> pwd.length() < 10;
+        Predicate<String> eq = pwd -> pwd.equals("password");
 
-        String password = "295111";
+        String password = getDefaultValue();
         Optional<String> opt = Optional.ofNullable(password);
-        boolean br = opt.filter(pwd -> pwd.length() > 6).isPresent();
+        boolean br1 = opt.filter(pwd -> pwd.length() > 6).isPresent();
+        boolean br2 = opt.filter(len6.and(len10)).isPresent();
+        boolean br3 = opt.filter(len6.and(len10).and(eq)).isPresent();
+
     }
 
     // 在foo为null的时候, 不调用
