@@ -34,109 +34,104 @@ public class LinkedBinaryTreeTest {
 
     }
 
-    static class LinkedBinaryTree{
+    static class LinkedBinaryTree {
         Node root;
 
-        public LinkedBinaryTree(Node root){
+        public LinkedBinaryTree(Node root) {
             this.root = root;
         }
 
         //尺寸、二叉树节点个数
-        public int size(Node root){
-            if(root == null){
+        public int size(Node root) {
+            if (root == null) {
                 return 0;
-            }else {
+            } else {
                 int nl = size(root.leftChild);
                 int nr = size(root.rightChild);
-                return nl+nr+1;
+                return nl + nr + 1;
             }
         }
 
         //二叉树高度
-        public int height(Node root){
-            if(root == null){
+        public int height(Node root) {
+            if (root == null) {
                 return 0;
-            }else{
+            } else {
                 int nl = height(root.leftChild);
                 int nr = height(root.rightChild);
-                return nl > nr ? nl+1 : nr+1;
+                return nl > nr ? nl + 1 : nr + 1;
             }
         }
 
         //在二叉树中寻找某个值
-        public Node findKey(Object value, Node root){
-            if(root == null){
+        public Node findKey(Object value, Node root) {
+            if (root == null) {
                 return null;
-            }else if(root != null && root.value == root){
+            } else if (root.value == root) {
                 return root;
-            }else {
-                Node nl = findKey(value,root.leftChild);
-                Node nr = findKey(value,root.rightChild);
+            } else {
+                Node nl = findKey(value, root.leftChild);
+                Node nr = findKey(value, root.rightChild);
 
-                if(nl != null && nl.value == value){
+                if (nl != null && nl.value == value) {
                     return nl;
                 }
 
-                if(nr != null && nr.value == value){
+                if (nr != null && nr.value == value) {
                     return nr;
                 }
-
                 return null;
             }
-
         }
 
         //二叉树先序遍历
-        public void preOrderTraverse(Node root){
-            if(root != null){
-                System.out.println(root.value+" ");
+        public void preOrderTraverse(Node root) {
+            if (root != null) {
+                System.out.println(root.value + " ");
                 preOrderTraverse(root.leftChild);
                 preOrderTraverse(root.rightChild);
             }
         }
 
         //按照层次遍历--借助栈
-        public void levelOrderByStack(){
-            if(root == null){
-                return ;
+        public void levelOrderByStack() {
+            if (root == null) {
+                return;
             }
 
             Queue<Node> queue = new LinkedList<>();
             queue.add(root);
 
-            while(queue.size() != 0){   //只要栈里面元素的个数不为0
+            while (queue.size() != 0) {   //只要栈里面元素的个数不为0
                 //遍历栈中的元素
-                for(int i=0;i<queue.size();i++){
+                for (int i = 0; i < queue.size(); i++) {
                     Node temp = queue.poll();   //把栈顶的元素取出
-                    System.out.println(temp.value+" ");
+                    System.out.println(temp.value + " ");
 
                     //然后再遍历栈顶元素的左子树、右子树
-                    if(temp.leftChild != null){
+                    if (temp.leftChild != null) {
                         queue.add(temp.leftChild);
                     }
 
-                    if(temp.rightChild != null){
+                    if (temp.rightChild != null) {
                         queue.add(temp.rightChild);
                     }
                 }
             }
-
         }
-
-
     }
 
-    static class Node{
+    static class Node {
 
         Object value;
         Node leftChild;
         Node rightChild;
 
-        public Node(Object value){
+        public Node(Object value) {
             this.value = value;
         }
 
-        public Node(Object value, Node leftChild, Node rightChild){
+        public Node(Object value, Node leftChild, Node rightChild) {
             this.value = value;
             this.leftChild = leftChild;
             this.rightChild = rightChild;
