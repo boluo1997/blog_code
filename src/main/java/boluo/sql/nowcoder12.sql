@@ -34,10 +34,3 @@ and salary = (
 order by dept_no
 
 
-
-
-
-
-
-
-
