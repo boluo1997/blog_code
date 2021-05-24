@@ -52,8 +52,6 @@ public class Note11_Optional {
         return "boluo";
     }
 
-
-
     static class Foo {
 
         Integer id;
