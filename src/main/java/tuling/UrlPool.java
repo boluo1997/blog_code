@@ -45,47 +45,48 @@ public class UrlPool {
 
             System.out.println("链接: " + mapping.getKey() + "---check: " + mapping.getValue());
 
-            if (!mapping.getValue()) {}
-                oldLink = mapping.getKey();
-                try {
-                    URL url = new URL(oldLink);
-                    HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-                    connection.setRequestMethod("GET");
-                    if (connection.getResponseCode() == 200) {
-                        BufferedReader reader = new BufferedReader(
-                                new InputStreamReader(connection.getInputStream()));
+            if (!mapping.getValue()) {
+            }
+            oldLink = mapping.getKey();
+            try {
+                URL url = new URL(oldLink);
+                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestMethod("GET");
+                if (connection.getResponseCode() == 200) {
+                    BufferedReader reader = new BufferedReader(
+                            new InputStreamReader(connection.getInputStream()));
 
-                        Pattern p = Pattern.compile("<a.*?href=[\"']?((https?://)?/?[^\"']+)[\"']?.*?>(.+)</a>");
-                        Matcher matcher = null;
-                        String line = "";
-                        while ((line = reader.readLine()) != null) {
-                            matcher = p.matcher(line);
-                            if (matcher.find()) {
-                                String newLink = matcher.group(1).trim();
+                    Pattern p = Pattern.compile("<a.*?href=[\"']?((https?://)?/?[^\"']+)[\"']?.*?>(.+)</a>");
+                    Matcher matcher = null;
+                    String line = "";
+                    while ((line = reader.readLine()) != null) {
+                        matcher = p.matcher(line);
+                        if (matcher.find()) {
+                            String newLink = matcher.group(1).trim();
 
-                                if (!newLink.startsWith("http")) {
-                                    if (newLink.startsWith("/")) {
-                                        newLink = oldLinkHost + newLink;
-                                    } else {
-                                        newLink = oldLinkHost + "/" + newLink;
-                                    }
+                            if (!newLink.startsWith("http")) {
+                                if (newLink.startsWith("/")) {
+                                    newLink = oldLinkHost + newLink;
+                                } else {
+                                    newLink = oldLinkHost + "/" + newLink;
                                 }
+                            }
 
-                                if (newLink.endsWith("/")) {
-                                    newLink = newLink.substring(0, newLink.length() - 1);
-                                }
+                            if (newLink.endsWith("/")) {
+                                newLink = newLink.substring(0, newLink.length() - 1);
+                            }
 
-                                if (!oldMap.containsKey(newLink) && !newMap.containsKey(newLink) && newLink.startsWith(oldLinkHost)) {
-                                    newMap.put(newLink, false);
-                                }
+                            if (!oldMap.containsKey(newLink) && !newMap.containsKey(newLink) && newLink.startsWith(oldLinkHost)) {
+                                newMap.put(newLink, false);
                             }
                         }
                     }
-                } catch (Exception e) {
-
-                } finally {
-
                 }
+            } catch (Exception e) {
+
+            } finally {
+
+            }
             oldMap.replace(oldLink, false, true);
         }
 
