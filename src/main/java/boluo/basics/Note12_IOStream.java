@@ -2,12 +2,10 @@ package boluo.basics;
 
 import org.junit.Test;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
+import java.io.*;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Scanner;
 
 public class Note12_IOStream {
 
@@ -120,6 +118,55 @@ public class Note12_IOStream {
 
         System.out.println("文件中的信息是: " + new String(byt, 0, len));
         in.close();
+    }
+
+    // FileReader类和FileWriter类
+    @Test
+    public void func5() throws Exception {
+        // FileReader类和FileWriter类对应了FileInputStream和FileOutputStream类,
+        // 其中, 读取文件的是FileReader类, 向文件中写入内容使用的是FileWriter类
+        // FileReader类与FileWriter类操作的数据单元是一个字符, 如果文件中有中文字符, 使用该类可以避免乱码
+
+        // 向文件中写入并读取控制台输入的内容
+        while (true) {
+            File file = new File("word.txt");
+            if (!file.exists()) file.createNewFile();
+            System.out.println("请输入要执行的操作序号: (1.写入文件, 2.读取文件)");
+            Scanner sc = new Scanner(System.in);
+            int choice = sc.nextInt();
+            switch (choice) {
+                case 1:
+                    System.out.println("请输入要写入的文件的内容: ");
+                    String tempStr = sc.next();
+                    FileWriter fw = null;   // 声明字符输出流
+
+                    // 创建可扩展的字符输入流, 向文件中写入新数据时不覆盖已存在的数据
+                    fw = new FileWriter(file, true);
+                    fw.write(tempStr + "\r\n");
+                    fw.close();
+
+                    System.out.println("上述内容已写入到文本文件中");
+                    break;
+                case 2:
+                    if (file.length() == 0) {
+                        System.out.println("文本中的字符个数为0!");
+                    } else {
+                        FileReader fr = new FileReader(file);
+                        char[] cbuf = new char[1024];
+                        int hasread = -1;
+
+                        while ((hasread = fr.read()) != -1) {
+                            System.out.println("文件中的内容为: " + new String(cbuf, 0, hasread));
+                        }
+                        fr.close(); // 关闭字符输入流
+                    }
+                    break;
+
+                default:
+                    System.out.println("请输入有效数字...");
+                    break;
+            }
+        }
     }
 
 }
