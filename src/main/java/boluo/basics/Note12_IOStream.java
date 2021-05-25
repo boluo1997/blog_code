@@ -3,6 +3,8 @@ package boluo.basics;
 import org.junit.Test;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -83,9 +85,42 @@ public class Note12_IOStream {
                 System.out.println(folder.getName() + " 文件夹");
             }
         }
-
     }
 
+    @Test
+    // 文件输入输出流
+    public void func4() throws Exception {
+        // 操作磁盘文件的FileInputStream类(读取文件使用)和FileOutputStream类(写入内容使用)
+        // FileInputStream是InputStream的子类
+        // FileOutputStream是OutputStream的子类
+
+        // FileInputStream类和FileOutputStream类操作的数据单元是一个字节, 如果文件中有中文字符(占两个字节),
+        // 那么使用FileInputStream类和FileOutputStream类读写文件会出现乱码
+
+        File file = new File("word.txt");
+
+        // 创建FileOutputStream对象, 向文件中写入数据
+        FileOutputStream out = new FileOutputStream(file, true);
+
+        // 定义字符串, 用来存储要写入文件的内容
+        String context = "悲欢如雨";
+
+        // 创建byte型数组, 将要写入文件的内容转为字节数组
+        byte[] buy = context.getBytes();
+
+        out.write(buy);
+        out.close();
+
+        //创建FileInputStream对象, 用来读取文件内容
+        FileInputStream in = new FileInputStream(file);
+        byte[] byt = new byte[1024];
+
+        // 从文件中读取信息, 并存入字节数组中
+        int len = in.read(byt);
+
+        System.out.println("文件中的信息是: " + new String(byt, 0, len));
+        in.close();
+    }
 
 }
 
