@@ -8,6 +8,8 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.*;
 import org.apache.spark.sql.catalyst.encoders.RowEncoder;
 import org.apache.spark.sql.expressions.Window;
+import org.apache.spark.sql.types.DataType;
+import org.apache.spark.sql.types.StringType$;
 import org.apache.spark.sql.types.StructType;
 import org.junit.Assert;
 import org.junit.Test;
@@ -17,6 +19,7 @@ import boluo.work.Func;
 import boluo.work.My;
 
 import java.io.IOException;
+import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -460,5 +463,51 @@ public class FuncTest {
         assertEquals(2L, df.where("date='2020-04-03'").first().getLong(1));
         assertEquals(3L, df.where("date='2020-04-05'").first().getLong(1));
         assertEquals(5L, df.where("date='2020-04-06'").first().getLong(1));
+    }
+
+    @Test
+    public void 分摊策略Test() {
+        DataType t1 = new StructType()
+                .add("策略号", "string")
+                .add("收款方", "string")
+                .add("账户", "string")
+                .add("科目", "string")
+                .add("固定金额", "long")
+                .add("非加液阶梯比例", "array<struct<k:double,a:long>>")
+                .add("加液比例", "double")
+                .add("开始时间", "timestamp");
+
+        DataType t2 = new StructType()
+                .add("编号", "string")
+                .add("名称", StringType$.MODULE$)
+                .add("省", StringType$.MODULE$)
+                .add("市", StringType$.MODULE$)
+                .add("区", StringType$.MODULE$)
+                .add("地址", StringType$.MODULE$)
+                .add("合同截止日期", "timestamp");
+
+        Dataset<Row> src = spark.createDataset(ImmutableList.of(
+                RowFactory.create(Timestamp.valueOf("2030-01-01 00:00:00"),
+                        RowFactory.create("1", null, null, "主营业务成本.装修费", null, null, null, Timestamp.valueOf("2019-01-01 00:00:00")),
+                        RowFactory.create(null, null, null, null, null, null, Timestamp.valueOf("2020-01-01 00:00:00"))),
+                RowFactory.create(Timestamp.valueOf("2030-01-01 00:00:00"),
+                        RowFactory.create("2", null, null, "主营业务成本.装修费", null, null, null, Timestamp.valueOf("2019-01-01 00:00:00")),
+                        RowFactory.create(null, null, null, null, null, null, Timestamp.valueOf("2030-01-01 00:00:00"))),
+                RowFactory.create(Timestamp.valueOf("2030-01-01 00:00:00"),
+                        RowFactory.create("3", null, null, "主营业务成本.装修费（空间设计费）", null, null, null, Timestamp.valueOf("2019-01-01 00:00:00")),
+                        RowFactory.create(null, null, null, null, null, null, Timestamp.valueOf("2023-01-01 00:00:00")))
+        ), RowEncoder.apply(new StructType()
+                .add("ts", "timestamp")
+                .add("share", t1)
+                .add("biz", t2)));
+        Dataset<Row> df;
+
+        df = src
+                .withColumn("ex", explode(My.分摊策略("ts", "share", "biz")))
+                .selectExpr("share.`策略号` no", "ex.*");
+
+        assertEquals(12 * 3, df.where("no='1'").count());
+        assertEquals(12 * 5, df.where("no='2'").count());
+        assertEquals(12 * 4, df.where("no='3'").count());
     }
 }
