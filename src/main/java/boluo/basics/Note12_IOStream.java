@@ -169,6 +169,14 @@ public class Note12_IOStream {
         }
     }
 
+    // 带缓冲的输入输出流
+    @Test
+    public void func6() {
+        // BufferInputStream类和BufferOutputStream类
+
+
+    }
+
 }
 
 
