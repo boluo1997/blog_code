@@ -10,9 +10,9 @@ public class RainbowFart {
 
 		String link = "https://chp.shadiao.app/api.php";
 		File file = new File("D:/boluo.txt");
-		FileWriter writer = new FileWriter(file, true);
 
 		for (int i = 0; i < 10000; i++) {
+			FileWriter writer = new FileWriter(file, true);
 			URL url = new URL(link);
 			HttpURLConnection connection = (HttpURLConnection) url.openConnection();
 			connection.setRequestMethod("GET");
