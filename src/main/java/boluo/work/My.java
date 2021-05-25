@@ -27,6 +27,7 @@ import org.apache.http.impl.client.HttpClients;
 import org.apache.spark.sql.*;
 import org.apache.spark.sql.api.java.UDF1;
 import org.apache.spark.sql.api.java.UDF2;
+import org.apache.spark.sql.api.java.UDF3;
 import org.apache.spark.sql.catalyst.expressions.DateDiff;
 import org.apache.spark.sql.expressions.MutableAggregationBuffer;
 import org.apache.spark.sql.expressions.UserDefinedAggregateFunction;
@@ -1028,6 +1029,89 @@ public class My {
                 expr(noLiquidRate), expr(liquidRate), expr(startDate), expr(endDate));
     }
 
+    public static Column 分摊策略(String ts1, String share1, String biz1) {
+
+        final int IDX_NO = 0;
+        final int IDX_PAYEE = 1;
+        final int IDX_ACCOUNT = 2;
+        final int IDX_SUBJECT = 3;
+        final int IDX_AMOUNT = 4;
+        final int IDX_NOLIQUID = 5;
+        final int IDX_LIQUID = 6;
+        final int IDX_TIME = 7;
+
+        return udf((UDF3<Timestamp, Row, Row, Row[]>) (Timestamp ts, Row share, Row biz) -> {
+
+            String subject = share.getAs(IDX_SUBJECT);
+            Long amount = (Long) Optional.ofNullable(share.getAs(IDX_AMOUNT)).orElse(0L);
+            WrappedArray<Row> noLiquid = share.getAs(IDX_NOLIQUID);
+            Double liquid = share.getAs(IDX_LIQUID);
+            Timestamp startTs = share.getAs(IDX_TIME);
+
+            if (subject.equals("主营业务成本.装修费") || subject.equals("主营业务成本.装修费（空间设计费）")) {
+
+                Timestamp endTs = biz.getAs("合同截止日期");
+                LocalDate startTime = startTs.toLocalDateTime().toLocalDate();
+                LocalDate endTime = endTs.toLocalDateTime().toLocalDate();
+                long years = startTime.until(endTime.plusYears(1).minusDays(1), ChronoUnit.YEARS);
+                if (years <= 3L) {
+                    endTime = startTime.plusYears(3);
+                } else if (years <= 5) {
+
+                } else {
+                    endTime = startTime.plusYears(5);
+                }
+
+                List<Row> result = Lists.newArrayList();
+                // 计算months
+                long days = startTime.until(endTime, ChronoUnit.DAYS);
+                List<Integer> months = Lists.newArrayList();
+                int k = 1;
+                for (LocalDate start = startTime; start.compareTo(endTime) < 0; start = startTime.plusMonths(k++)) {
+                    LocalDate end = Stream.of(start.plusMonths(1), endTime).min(LocalDate::compareTo).get();
+                    months.add((int) start.until(end, ChronoUnit.DAYS));
+                }
+                Preconditions.checkArgument(months.stream().mapToInt(i -> i).sum() == days, "months中天数不正确!");
+                Iterator<Long> eachMonthAmountIt = shareAmount(amount, months).iterator();
+
+                int j = 1;
+                for (LocalDate start = startTime; start.compareTo(endTime) < 0; start = startTime.plusMonths(j++)) {
+                    Long currAmount = eachMonthAmountIt.hasNext() ? eachMonthAmountIt.next() : 0L;
+                    LocalDate end = Stream.of(start.plusMonths(1), endTime).min(LocalDate::compareTo).get();
+
+                    Timestamp resultStartTs = Timestamp.valueOf(start.atTime(0, 0));
+                    Timestamp resultEndTs = Timestamp.valueOf(end.atTime(0, 0));
+                    result.add(RowFactory.create(currAmount, noLiquid, liquid, resultStartTs, resultEndTs));
+                }
+
+                return result.toArray(new Row[0]);
+            } else {
+                return new Row[]{
+                        RowFactory.create(amount, noLiquid, liquid, startTs, ts)
+                };
+            }
+
+        }, ArrayType.apply(new StructType().add("固定金额", DataTypes.LongType)
+                .add("非加液分成比例", ArrayType.apply(new StructType().add("k", DataTypes.DoubleType).add("a", DataTypes.LongType)))
+                .add("加液分成比例", DataTypes.DoubleType)
+                .add("开始时间", DataTypes.TimestampType)
+                .add("结束时间", DataTypes.TimestampType)
+        )).apply(expr(ts1), expr(share1), expr(biz1));
+    }
+
+    private static Iterable<Long> shareAmount(Long amount, List<Integer> months) {
+
+        int length = months.stream().mapToInt(i -> i).sum();
+        List<Long> list = Lists.newArrayList();
+        Iterator<Integer> it = months.iterator();
+        int sum = 0;
+        while (it.hasNext()) {
+            int currMonthDays = it.next();
+            list.add(Math.round(1.0 * (sum + currMonthDays) / length * amount) - Math.round(1.0 * sum / length * amount));
+            sum += currMonthDays;
+        }
+        return list;
+    }
 
     public static Column merge(String col, StructType type) {
 

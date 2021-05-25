@@ -1,10 +1,13 @@
 package boluo.work;
 
+import org.apache.spark.sql.Row;
+import org.apache.spark.sql.RowFactory;
 import org.junit.Test;
 
 import java.sql.Timestamp;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
+import java.util.stream.Stream;
 
 /**
  * 一些关于时间的常用方法
@@ -56,4 +59,33 @@ public class Time {
         Instant newInstant = Timestamp.valueOf(LocalDateTime.of(1997, 3, 1, 12, 30)).toInstant();
     }
 
+    @Test
+	// 按月遍历时间
+    public void func4(){
+        String startTimeStr = "2020-01-01";
+        String endTimeStr = "2021-05-25";
+
+        LocalDate startTime = LocalDate.parse(startTimeStr);
+        LocalDate endTime = LocalDate.parse(endTimeStr);
+
+        int k = 1;
+        for (LocalDate start = startTime; start.compareTo(endTime) < 0; start = startTime.plusMonths(k++)) {
+			LocalDate end = Stream.of(start.plusMonths(1), endTime).min(LocalDate::compareTo).get();
+			System.out.println(RowFactory.create(start, end));
+		}
+    }
+
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
