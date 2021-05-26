@@ -173,11 +173,17 @@ public class Note12_IOStream {
     @Test
     public void func6() {
         // BufferInputStream类和BufferOutputStream类
+        // BufferedInputStream类可以对所有InputStream的子类进行带缓冲区的包装
+        // BufferedOutputStream类中的flush()方法用来把缓冲区中的字节写入到文件中
 
 
     }
 
+
+
 }
+
+
 
 
 
