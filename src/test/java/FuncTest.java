@@ -515,10 +515,11 @@ public class FuncTest {
     @Test
     // 调用接口测试
     public void apiTest() {
-        ObjectNode args = mapper.createObjectNode();
-        args.put("pageNo", "1").put("count", "20");
-        JsonNode jsonNode = apiRequest(HttpMethod.POST, "url", "token", "", args);
+
+        JsonNode jsonNode = apiRequest(HttpMethod.POST,
+                "http://localhost:8848/article/item/1", "", "", null);
 		System.out.println(jsonNode);
+        // 打印结果: {"status":200,"msg":"OK","data":null}
     }
 
 }
