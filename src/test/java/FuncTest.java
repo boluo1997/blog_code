@@ -29,6 +29,7 @@ import static org.junit.Assert.assertEquals;
 
 import java.io.IOException;
 
+import javax.ws.rs.HttpMethod;
 import static boluo.work.My.*;
 
 public class FuncTest {
@@ -510,4 +511,14 @@ public class FuncTest {
         assertEquals(12 * 5, df.where("no='2'").count());
         assertEquals(12 * 4, df.where("no='3'").count());
     }
+
+    @Test
+    // 调用接口测试
+    public void apiTest() {
+        ObjectNode args = mapper.createObjectNode();
+        args.put("pageNo", "1").put("count", "20");
+        JsonNode jsonNode = apiRequest(HttpMethod.POST, "url", "token", "", args);
+		System.out.println(jsonNode);
+    }
+
 }

@@ -1428,7 +1428,7 @@ public class My {
                 .filter(i -> i.at("/tableValues").size() + i.at("/values").size() > 0);
     }
 
-    private static JsonNode apiRequest(String method, String uri, String token, String userId, JsonNode body) {
+    public static JsonNode apiRequest(String method, String uri, String token, String userId, JsonNode body) {
         RequestBuilder requestBuilder = RequestBuilder.create(method)
                 .setUri(uri)
                 .setHeader("accessToken", token)
