@@ -171,11 +171,38 @@ public class Note12_IOStream {
 
     // 带缓冲的输入输出流
     @Test
-    public void func6() {
+    public void func6() throws Exception {
         // BufferInputStream类和BufferOutputStream类
         // BufferedInputStream类可以对所有InputStream的子类进行带缓冲区的包装
         // BufferedOutputStream类中的flush()方法用来把缓冲区中的字节写入到文件中
 
+        // 以字节为单位进行输入和输出
+        String[] content = {"boluo, ", "qidai, ", "dingc, "};
+        File file = new File("word.txt");
+
+        FileOutputStream fos = new FileOutputStream(file);
+        BufferedOutputStream bos = new BufferedOutputStream(fos);
+
+        byte[] bContent1 = new byte[1024];
+        for (int i = 0; i < content.length; i++) {
+            bContent1 = content[i].getBytes();
+            bos.write(bContent1);
+        }
+        System.out.println("写入成功!");
+
+        bos.close();
+        fos.close();
+
+        FileInputStream fis = new FileInputStream(file);
+        BufferedInputStream bis = new BufferedInputStream(fis);
+
+        byte[] bContent2 = new byte[1024];
+        int len = bis.read(bContent2);
+
+        System.out.println("文件中的内容是: " + new String(bContent2, 0, len));
+
+        bis.close();
+        fis.close();
 
     }
 
