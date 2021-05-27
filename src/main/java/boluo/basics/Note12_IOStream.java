@@ -206,7 +206,25 @@ public class Note12_IOStream {
 
     }
 
+    @Test
+    // BufferedReader 和 BufferedWriter
+    public void func7() throws Exception {
+        // BufferedReader继承Reader类, 这两个类同样具有内部缓冲机制, 并以行为单位进行输入和输出
 
+        /**
+         * BufferedReader:
+         * read() 读取单个字符
+         * readLine() 读取一个文本行
+         */
+
+        /**
+         * BufferedWriter
+         * write(String s, int off, int len) 写入字符串的某一部分
+         * flush() 刷新该流的缓冲
+         * newLine() 写入一个行分隔符
+         */
+
+    }
 
 }
 
