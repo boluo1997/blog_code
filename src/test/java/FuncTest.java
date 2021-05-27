@@ -514,7 +514,7 @@ public class FuncTest {
 
     @Test
     // 调用接口测试
-    public void apiTest() {
+    public void apiTest1() {
 
         JsonNode jsonNode = apiRequest(HttpMethod.POST,
                 "http://localhost:8848/article/item/1", "", "", null);
