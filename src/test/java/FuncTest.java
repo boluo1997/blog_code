@@ -30,6 +30,7 @@ import static org.junit.Assert.assertEquals;
 import java.io.IOException;
 
 import javax.ws.rs.HttpMethod;
+
 import static boluo.work.My.*;
 
 public class FuncTest {
@@ -518,8 +519,39 @@ public class FuncTest {
 
         JsonNode jsonNode = apiRequest(HttpMethod.POST,
                 "http://localhost:8848/article/item/1", "", "", null);
-		System.out.println(jsonNode);
+        System.out.println(jsonNode);
         // 打印结果: {"status":200,"msg":"OK","data":null}
+    }
+
+    @Test
+    public void apiTest2() {
+        ObjectNode requestNode = mapper.createObjectNode();
+        requestNode.put("page", "1");
+        requestNode.put("rows", "5");
+        JsonNode jsonNode = apiRequest(HttpMethod.POST,
+                "http://localhost:10002/animal/pageManage", "", "", requestNode);
+        System.out.println(jsonNode);
+
+        // 打印结果:
+        //{
+        //    "total": 26,
+        //    "rows": [
+        //        {
+        //            "animalId": 1,
+        //            "animalName": "小白",
+        //            "animalImage": "http://image.boluo.com/upload/d/5/f/3/3/a/e/0/0d65bfaa-e161-4c2b-83fc-abc546e302e1.jpg",
+        //            "animalType": "狗",
+        //            "animalInfo": "九个月大！性别：母，超级黏人，已经做了绝育，等待你来领养哦！",
+        //            "giveName": "救助站",
+        //            "giveTitle": "救助站小白等待你领养哦！",
+        //            "givePhone": "18831086282",
+        //            "giveAddress": "唐山市流浪动物救助中心"
+        //        },
+        //        {
+        //
+        //        }
+        //    ]
+        //}
     }
 
 }
