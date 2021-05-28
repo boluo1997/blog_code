@@ -48,4 +48,9 @@ public class boluoTest {
         System.out.println(c & 1);
 
     }
+
+    @Test
+    public void func4() {
+        // 分支测试
+    }
 }
