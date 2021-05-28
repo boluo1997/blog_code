@@ -51,6 +51,6 @@ public class boluoTest {
 
     @Test
     public void func4() {
-        // 分支测试
+        // 分支测试2
     }
 }
