@@ -224,7 +224,32 @@ public class Note12_IOStream {
          * newLine() 写入一个行分隔符
          */
 
-    }
+		// 以行为单位进行输入输出
+
+		String[] content = {"boluo, ", "qidai, ", "dingc, "};
+		File file = new File("word.txt");
+
+		FileWriter fw = new FileWriter(file);
+		BufferedWriter bufw = new BufferedWriter(fw);
+		for (String str : content) {
+			bufw.write(str);    // 将字符串数组中元素写入到磁盘文件中
+			bufw.newLine();        // 将数组中的单个元素以单行的形式写入文件
+		}
+		bufw.close();
+		fw.close();
+
+
+		FileReader fr = new FileReader(file);
+		BufferedReader bufr = new BufferedReader(fr);
+		String s = null;
+		int i = 0;
+		while ((s = bufr.readLine()) != null) {
+			i++;
+			System.out.println("第" + i + "行: " + s);
+		}
+		bufr.close();
+		fr.close();
+	}
 
 }
 
