@@ -1,6 +1,7 @@
 package boluo.datastructure.tree;
 
 import java.util.LinkedList;
+import java.util.Objects;
 import java.util.Queue;
 
 public class LinkedBinaryTreeTest {
@@ -17,21 +18,24 @@ public class LinkedBinaryTreeTest {
         Node node2 = new Node(2, node3, node6);
         Node node1 = new Node(1, node4, node2);
 
-        LinkedBinaryTree btree = new LinkedBinaryTree(node1);
+        LinkedBinaryTree btree1 = new LinkedBinaryTree(node1);
+        LinkedBinaryTree btree2 = new LinkedBinaryTree(node1);
 
-        System.out.println("二叉树节点个数" + btree.size(node1));
-        System.out.println("二叉树高度" + btree.height(node1));
-        System.out.println("寻找值" + btree.findKey(3, node1));
+        System.out.println("二叉树节点个数" + btree1.size(node1));
+        System.out.println("二叉树高度" + btree1.height(node1));
+        System.out.println("寻找值" + btree1.findKey(3, node1));
         //btree.preOrderTraverse();
         System.out.println("先序遍历");
-        btree.preOrderTraverse(node1);
+        btree1.preOrderTraverse(node1);
         System.out.println("中序遍历");
         //btree.inOrderTraverse(node1);
         System.out.println("后序遍历");
         //btree.postOrderTraverse(node1);
         System.out.println("层遍历");
-        btree.levelOrderByStack();
+        btree1.levelOrderByStack();
 
+        // 判断两个二叉树是否完全相等
+        System.out.println(compare(node1, node1));
     }
 
     static class LinkedBinaryTree {
@@ -145,5 +149,22 @@ public class LinkedBinaryTreeTest {
                     ", rightChild=" + rightChild +
                     '}';
         }
+    }
+
+    // 判断两个二叉树是否完全相等
+    public static boolean compare(Node node1, Node node2) {
+        if (Objects.isNull(node1) && Objects.isNull(node2)) {
+            return true;
+        }
+
+        if (Objects.isNull(node1) || Objects.isNull(node2)) {
+            return false;
+        }
+
+        if (node1.value != node2.value) {
+            return false;
+        }
+
+        return compare(node1.leftChild, node2.leftChild) && compare(node1.rightChild, node2.rightChild);
     }
 }
