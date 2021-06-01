@@ -2,10 +2,11 @@ package boluo.basics;
 
 import org.junit.Test;
 
-import java.util.function.BiFunction;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.IntStream;
 
 public class Note09_Lambda {
 
@@ -45,6 +46,22 @@ public class Note09_Lambda {
 
         // Predicate 一个入参, 返回Boolean
 
+
+    }
+
+    @Test
+    public void func3() {
+
+//		如果声明 int value = 0 再加上以下代码后会编译错误
+//    	Executors.newSingleThreadExecutor().submit(new Runnable() {
+//			@Override
+//			public void run() {
+//				value++;
+//			}
+//		});
+
+		AtomicInteger value = new AtomicInteger();
+		IntStream.range(0, 10).forEach(i -> value.getAndIncrement());
 
     }
 
