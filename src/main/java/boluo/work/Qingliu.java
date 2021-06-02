@@ -49,8 +49,8 @@ public class Qingliu {
 
 	public static long replace(Dataset<Row> ds, String url, String key) {
 
-		String appId = "1670d156";
-		String token = "638fb362-7ee9-4d85-9359-e92f5c7b353e";
+		String appId = "167";
+		String token = "638fb362";
 
 		// ds.show(false);
 		StructType schema = ds.schema();
