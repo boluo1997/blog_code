@@ -192,6 +192,30 @@ public class Note07_Stream {
         System.out.println(map);
     }
 
+    @Test
+    public void func10() {
+
+    	// map and flatMap
+		String[] words = new String[]{"Hello", "World"};
+		List<String[]> a1 = Arrays.stream(words)
+				.map(word -> word.split(""))
+				.collect(Collectors.toList());
+		a1.forEach(System.out::println);
+		a1.forEach(jn -> Arrays.stream(jn).collect(Collectors.toList()).forEach(System.out::println));
+
+		List<String> a2 = Arrays.stream(words)
+				.map(word -> word.split(""))
+				// .flatMap(word ->Stream.of(word))
+				.flatMap(Stream::of)
+
+				// .flatMap(word -> Arrays.stream(word.clone()))
+				// .flatMap(Arrays::stream)
+
+				// .flatMap(word -> Stream.of(word.split("")))
+				.collect(Collectors.toList());
+    	a2.forEach(System.out::print);
+    }
+
     class Student {
         private String name;
         private List<Double> score;
