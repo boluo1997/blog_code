@@ -1,6 +1,5 @@
 package boluo.work;
 
-import com.clearspring.analytics.util.Lists;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.*;
@@ -16,27 +15,25 @@ import org.apache.http.client.methods.RequestBuilder;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
-import org.apache.spark.api.java.function.ForeachPartitionFunction;
-import org.apache.spark.sql.Dataset;
-import org.apache.spark.sql.Row;
-import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.*;
 import org.apache.spark.sql.types.StructType;
+import org.apache.spark.util.CollectionAccumulator;
+import org.apache.spark.util.LongAccumulator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import scala.Option;
 
 import javax.ws.rs.HttpMethod;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.Serializable;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.sql.Date;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class Qingliu implements Serializable {
+public class Qingliu {
 
 	private static final ObjectMapper mapper = new ObjectMapper();
 	private static final Logger logger = LoggerFactory.getLogger(Qingliu.class);
@@ -56,95 +53,103 @@ public class Qingliu implements Serializable {
 		String token = sUri.getQuery();
 		token = token.substring(6);
 
-		AtomicInteger count = new AtomicInteger();
 		StructType schema = ds.schema();
 
-		// 查询申请人账户...
+		// 查询申请人账户
 		Optional<JsonNode> creator = user("小兰Robot", token);
 		String userId = creator.map(i -> i.at("/userId").asText()).orElse(null);
 
 		// 获取应用表单信息
-		JsonNode form = form(appId, token);
-		List<JsonNode> fields = Streams.stream(form.at("/questionBaseInfos"))
-				.filter(i -> Arrays.asList(schema.fieldNames()).contains(i.at("/queTitle").asText()))
-				.collect(Collectors.toList());
+		List<ObjectNode> form = form(appId, token, schema);
+		List<String> formSer = form.stream().map(ObjectNode::toString).collect(Collectors.toList());
 
 		// 分页查询应用数据
-		List<ObjectNode> qingliuData = getQingliuData(appId, token);
-		List<JsonNode> deleteQingliuData = Lists.newArrayList();
-		Set<String> keySet = Sets.newTreeSet();
-		for (ObjectNode jn : qingliuData) {
-			String jnKey = getKey(jn.withArray("answers"), key);
-			if (!Strings.isNullOrEmpty(jnKey)) {
-				keySet.add(jnKey);
-			}
+		List<ObjectNode> qingliuDataObjectNode = getQingliuData(appId, token);
+		List<String> qingliuDataStr = qingliuDataObjectNode.stream().map(ObjectNode::toString).collect(Collectors.toList());
+		Set<Object> keySet = Sets.newHashSet();
+		for (ObjectNode jn : qingliuDataObjectNode) {
+			Object jnKey = getKey(jn.withArray("answers"), key);
+			keySet.add(Objects.requireNonNull(jnKey));
 		}
 
 		String finalToken = token;
+		CollectionAccumulator<Object> removeQingliuAc = new CollectionAccumulator<>();
+		LongAccumulator updateCount = new LongAccumulator();
+		removeQingliuAc.register(spark.sparkContext(), Option.apply("removeQingliuData"), false);
+		updateCount.register(spark.sparkContext(), Option.apply("updateCount"), false);
 
-		// ds.foreachPartition()
-		ds.toLocalIterator().forEachRemaining(row -> {
+		ds.foreachPartition((rowIt) -> {
+			while (rowIt.hasNext()) {
+				Row row = rowIt.next();
+				ObjectNode dsAnswer = mapper.createObjectNode();
 
-			ObjectNode dsAnswer = mapper.createObjectNode();
-			answers(fields, row)
-					.forEach(dsAnswer.withArray("answers")::add);
+				List<ObjectNode> qingliuData = stringToObjectNode(qingliuDataStr);
+				Iterable<ObjectNode> form2 = stringToObjectNode(formSer);
 
-			Object dsKey1 = Optional.ofNullable(row.getAs(key)).orElse("");
-			String dsKey = dsKey1.toString();
-			if (keySet.contains(dsKey)) {
+				answers(form2, row)
+						.forEach(dsAnswer.withArray("answers")::add);
 
-				JsonNode answersJsonNode = getKeyNode(qingliuData, key, dsKey);
-				if (Objects.isNull(answersJsonNode)) throw new UnsupportedOperationException();
+				Object dsKey1 = Optional.ofNullable(row.getAs(key)).orElse("");
+				if (keySet.contains(dsKey1)) {
 
-				ArrayNode answersArrayNode;
-				ArrayNode dsArrayNode;
-				if (answersJsonNode.at("/answers").isArray() && dsAnswer.at("/answers").isArray()) {
-					answersArrayNode = (ArrayNode) answersJsonNode.at("/answers");
-					dsArrayNode = (ArrayNode) dsAnswer.at("/answers");
+					JsonNode answersJsonNode = getKeyNode(qingliuData, key, dsKey1);
+					if (Objects.isNull(answersJsonNode)) throw new UnsupportedOperationException();
+
+					ArrayNode answersArrayNode;
+					ArrayNode dsArrayNode;
+					if (answersJsonNode.at("/answers").isArray() && dsAnswer.at("/answers").isArray()) {
+						answersArrayNode = (ArrayNode) answersJsonNode.at("/answers");
+						dsArrayNode = (ArrayNode) dsAnswer.at("/answers");
+					} else {
+						throw new UnsupportedOperationException();
+					}
+
+					if (!compare(answersArrayNode, dsArrayNode)) {
+						// 属性不相同, 更新单条数据信息
+						String applyId = answersJsonNode.at("/applyId").asText();
+						JsonNode req = apiRequest(HttpMethod.POST, String.format("https://api.ding.qingflow.com/apply/%s", applyId), finalToken, userId, dsAnswer);
+						String requestId = req.at("/result/requestId").asText();
+						Preconditions.checkArgument(!Strings.isNullOrEmpty(requestId), "requestId MISSING");
+						try {
+							Thread.sleep(1000);
+						} catch (InterruptedException e) {
+							e.printStackTrace();
+						}
+						JsonNode updateCheck = apiRequest(HttpMethod.GET, String.format("https://api.ding.qingflow.com/operation/%s", requestId), finalToken, userId, null);
+						Preconditions.checkArgument(updateCheck.at("/errorCode").asInt() == 0, "");
+						updateCount.add(1L);
+					}
+					removeQingliuAc.add(dsKey1);
 				} else {
-					throw new UnsupportedOperationException();
-				}
-
-				if (!compare(answersArrayNode, dsArrayNode)) {
-					// 属性不相同, 更新单条数据信息
-					String applyId = answersJsonNode.at("/applyId").asText();
-					JsonNode req = apiRequest(HttpMethod.POST, String.format("https://api.ding.qingflow.com/apply/%s", applyId), finalToken, userId, dsAnswer);
-					String requestId = req.at("/result/requestId").asText();
-					Preconditions.checkArgument(!Strings.isNullOrEmpty(requestId), "requestId MISSING");
+					// 添加数据
+					JsonNode req = apiRequest(HttpMethod.POST, String.format("https://api.ding.qingflow.com/app/%s/apply", appId), finalToken, userId, dsAnswer);
+					String requestId = req.at("/result/requestId").textValue();
+					Preconditions.checkArgument(!Strings.isNullOrEmpty(requestId), "MISSING requestId");
 					try {
 						Thread.sleep(1000);
 					} catch (InterruptedException e) {
 						e.printStackTrace();
 					}
-					JsonNode updateCheck = apiRequest(HttpMethod.GET, String.format("https://api.ding.qingflow.com/operation/%s", requestId), finalToken, userId, null);
-					Preconditions.checkArgument(updateCheck.at("/errorCode").asInt() == 0, "");
-					count.set(count.get() + 1);
+					JsonNode addCheck = apiRequest(HttpMethod.GET, String.format("https://api.ding.qingflow.com/operation/%s", requestId), finalToken, userId, null);
+					Preconditions.checkArgument(addCheck.at("/errorCode").asInt() == 0, "");
+					removeQingliuAc.add(dsKey1);
+					updateCount.add(1L);
 				}
-				deleteQingliuData.add(answersJsonNode);
-			} else {
-				// 添加数据
-				JsonNode req = apiRequest(HttpMethod.POST, String.format("https://api.ding.qingflow.com/app/%s/apply", appId), finalToken, userId, dsAnswer);
-				String requestId = req.at("/result/requestId").textValue();
-				Preconditions.checkArgument(!Strings.isNullOrEmpty(requestId), "MISSING requestId");
-				try {
-					Thread.sleep(1000);
-				} catch (InterruptedException e) {
-					e.printStackTrace();
-				}
-				JsonNode addCheck = apiRequest(HttpMethod.GET, String.format("https://api.ding.qingflow.com/operation/%s", requestId), finalToken, userId, null);
-				Preconditions.checkArgument(addCheck.at("/errorCode").asInt() == 0, "");
-				count.set(count.get() + 1);
-				deleteQingliuData.add(dsAnswer);
 			}
-
-			// 从qingliuData中删除
-			qingliuData.removeAll(deleteQingliuData);
-
 		});
+
+		// 先从qingliuData中把不需要删除的数据排除掉, 留下的都是需要删除的
+		for (Object ac : removeQingliuAc.value()) {
+			for (int j = 0; j < qingliuDataObjectNode.size(); j++) {
+				if (Objects.equals(getKey(qingliuDataObjectNode.get(j).withArray("answers"), key), ac)) {
+					qingliuDataObjectNode.remove(j--);
+				}
+			}
+		}
 
 		// 删除数据
 		Set<String> deleteApplyIds = Sets.newTreeSet();
-		for (JsonNode jn : qingliuData) {
+		for (JsonNode jn : qingliuDataObjectNode) {
 			deleteApplyIds.add(jn.at("/applyId").asText());
 		}
 
@@ -163,11 +168,22 @@ public class Qingliu implements Serializable {
 			}
 			JsonNode deleteCheck = apiRequest(HttpMethod.GET, String.format("https://api.ding.qingflow.com/operation/%s", requestId), token, userId, null);
 			Preconditions.checkArgument(deleteCheck.at("/errorCode").asInt() == 0, "删除错误！");
-			count.set(count.get() + deleteApplyIds.size());
+			updateCount.add(deleteApplyIds.size());
 		}
-		return count.get();
+		return updateCount.value();
 	}
 
+	private static List<ObjectNode> stringToObjectNode(List<String> list) {
+		return list.stream()
+				.map(i -> {
+					try {
+						return (ObjectNode) mapper.readTree(i);
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+					throw new UnsupportedOperationException("String to ObjectNode异常");
+				}).collect(Collectors.toList());
+	}
 
 	private static List<ObjectNode> getQingliuData(String app, String token) {
 
@@ -189,7 +205,7 @@ public class Qingliu implements Serializable {
 				.limit(Math.max(pageAmount - 1, 0))
 				.map(i -> {
 					args.put("pageNum", i);
-					return (ObjectNode) apiRequest(HttpMethod.POST,
+					return apiRequest(HttpMethod.POST,
 							String.format("https://api.ding.qingflow.com/app/%s/apply/filter", app),
 							token, null, args);
 				});
@@ -205,7 +221,7 @@ public class Qingliu implements Serializable {
 		return resultData;
 	}
 
-	private static Stream<ObjectNode> answers(Iterable<JsonNode> form, Row p) {
+	private static Stream<ObjectNode> answers(Iterable<ObjectNode> form, Row p) {
 		return Streams.stream(form)
 				.map(f -> {
 					int queId = f.at("/queId").intValue();
@@ -264,7 +280,7 @@ public class Qingliu implements Serializable {
 				.filter(i -> i.at("/tableValues").size() + i.at("/values").size() > 0);
 	}
 
-	private static JsonNode getKeyNode(List<ObjectNode> nodeList, String key, String dsKey) {
+	private static JsonNode getKeyNode(List<ObjectNode> nodeList, String key, Object dsKey) {
 		for (ObjectNode jn : nodeList) {
 			if (Objects.equals(getKey(jn.withArray("answers"), key), dsKey)) {
 				return jn;
@@ -273,6 +289,7 @@ public class Qingliu implements Serializable {
 		return null;
 	}
 
+	@SuppressWarnings("unchecked")
 	private static <T> T getKey(ArrayNode answer, String key) {
 
 		for (JsonNode jn : answer) {
@@ -280,6 +297,10 @@ public class Qingliu implements Serializable {
 				String queType = jn.at("/queType").asText();
 				switch (queType) {
 					case "":
+						JsonNodeType type = jn.at("/values/0/value").getNodeType();
+						if (type == JsonNodeType.STRING) return (T) jn.at("/values/0/value").asText();
+						if (type == JsonNodeType.NUMBER) return (T) (Object) jn.at("/values/0/value").asLong();
+						throw new UnsupportedOperationException("未知的类型...");
 					case "2":
 						return (T) jn.at("/values/0/value").asText();
 					case "8":
@@ -289,7 +310,7 @@ public class Qingliu implements Serializable {
 				}
 			}
 		}
-		return null;
+		throw new IllegalArgumentException();
 	}
 
 	private static boolean compare(ArrayNode answer1, ArrayNode answer2) {
@@ -315,7 +336,7 @@ public class Qingliu implements Serializable {
 		return br;
 	}
 
-	private static JsonNode apiRequest(String method, String uri, String token, String userId, JsonNode body) {
+	private static ObjectNode apiRequest(String method, String uri, String token, String userId, JsonNode body) {
 		RequestBuilder requestBuilder = RequestBuilder.create(method)
 				.setUri(uri)
 				.setHeader("accessToken", token)
@@ -331,7 +352,7 @@ public class Qingliu implements Serializable {
 			 InputStream is = response.getEntity().getContent()) {
 			// logger.info("{} {}:{}", method, uri, body);
 			Preconditions.checkArgument(response.getStatusLine().getStatusCode() == 200, response.getStatusLine());
-			return mapper.readTree(is);
+			return (ObjectNode) mapper.readTree(is);
 		} catch (IOException e) {
 			throw new RuntimeException(String.format("%s %s:%s", method, uri, body), e);
 		}
@@ -350,12 +371,19 @@ public class Qingliu implements Serializable {
 				.findAny();
 	}
 
-	private static JsonNode form(String app, String token) {
-		return requestCache.asMap().computeIfAbsent(String.format("https://api.ding.qingflow.com/app/%s/form", app), uri -> {
-			JsonNode form = apiRequest(HttpMethod.GET, uri, token, null, null);
-			Preconditions.checkArgument(form.at("/errCode").asInt(500) == 0, form.at("/errMsg").asText());
-			return form.at("/result");
-		});
+	private static List<ObjectNode> form(String app, String token, StructType schema) {
+
+		String uri = String.format("https://api.ding.qingflow.com/app/%s/form", app);
+		ObjectNode form = apiRequest(HttpMethod.GET, uri, token, null, null);
+		Preconditions.checkArgument(form.at("/errCode").asInt(500) == 0, form.at("/errMsg").asText());
+		ObjectNode obj = form.with("result");
+
+		List<ObjectNode> fields = Streams.stream(obj.at("/questionBaseInfos"))
+				.filter(i -> Arrays.asList(schema.fieldNames()).contains(i.at("/queTitle").asText()))
+				.map(i -> (ObjectNode) i)
+				.collect(Collectors.toList());
+
+		return fields;
 	}
 
 }

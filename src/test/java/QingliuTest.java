@@ -43,10 +43,10 @@ public class QingliuTest {
 	}
 
 	@Test
+	@SuppressWarnings("unchecked")
 	public void replaceTest() throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
-
-		String appid = "1670d156";
-		String token = "638fb362-7ee9-4d85-9359-e92f5c7b353e";
+		String appid = "167";
+		String token = "638";
 		Method getQingliuData = Qingliu.class.getDeclaredMethod("getQingliuData", String.class, String.class);
 		getQingliuData.setAccessible(true);
 		Method compare = Qingliu.class.getDeclaredMethod("compare", ArrayNode.class, ArrayNode.class);
@@ -99,6 +99,18 @@ public class QingliuTest {
 		Assert.assertEquals(3, actual.size());
 
 		src = spark.createDataset(ImmutableList.of(
+				RowFactory.create("测试字段1", "编号1", "名称1", 1L),
+				RowFactory.create("测试字段2", "编号2", "名称2", 2L),
+				RowFactory.create("测试字段3", "编号3", "名称3", 3L)
+		), RowEncoder.apply(new StructType()
+				.add("测试字段", "string")
+				.add("编号", "string")
+				.add("名称", "string")
+				.add("数字", "long")));
+		updated = Qingliu.replace(src, String.format("qingliu://%s?token=%s", appid, token), "数字");
+		Assert.assertEquals(0, updated);
+
+		src = spark.createDataset(ImmutableList.of(
 				RowFactory.create("测试字段1", "编号1"),
 				RowFactory.create("测试字段2", "编号2"),
 				RowFactory.create("测试字段3", "编号3")
@@ -139,8 +151,21 @@ public class QingliuTest {
 				.withArray("values")
 				.addObject()
 				.put("value", "20");
+		answer.addObject()
+				.put("queTitle", "数字1")
+				.withArray("values")
+				.addObject()
+				.put("value", 20);
+		answer.addObject()
+				.put("queTitle", "数字2")
+				.put("queType", "8")
+				.withArray("values")
+				.addObject()
+				.put("value", 20);
 
 		Assert.assertEquals("20", getKey.invoke(null, answer, "编号"));
+		Assert.assertEquals(20L, getKey.invoke(null, answer, "数字1"));
+		Assert.assertEquals(20L, getKey.invoke(null, answer, "数字2"));
 	}
 
 	@Test
