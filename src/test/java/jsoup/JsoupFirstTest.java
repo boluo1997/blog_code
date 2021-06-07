@@ -2,12 +2,14 @@ package jsoup;
 
 import org.apache.commons.io.FileUtils;
 import org.jsoup.Jsoup;
+import org.jsoup.nodes.Attributes;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.junit.Test;
 
 import java.io.File;
 import java.net.URL;
+import java.util.Set;
 
 public class JsoupFirstTest {
 
@@ -75,5 +77,46 @@ public class JsoupFirstTest {
         System.out.println("获取到的元素内容是: " + element5.text());
 
     }
+
+    @Test
+    public void testData() throws Exception {
+
+		// 解析文件, 获取document
+		Document doc = Jsoup.parse(new File("doc/test/jsoup-test.html"), "utf-8");
+
+		// 根据id获取元素
+		Element element = doc.getElementById("age1");
+
+		String str = "";
+		// 从元素中获取数据
+
+		// 1. 从元素中获取id
+		str = element.id();
+
+		// 2.从元素中获取className
+		str = element.className();
+
+		Set<String> set = element.classNames();
+		for(String s : set){
+			System.out.println(s);
+		}
+
+		// 3.从元素中获取属性的值
+		str = element.attr("id");
+
+		// 4.从元素中获取所有属性attributes
+		Attributes attributes = element.attributes();
+		System.out.println(attributes.toString());
+
+		// 5.从元素汇总获取文本内容text
+		str = element.text();
+
+		System.out.println(str);
+	}
+
+
+
+
+
 
 }
