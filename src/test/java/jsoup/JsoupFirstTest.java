@@ -27,7 +27,7 @@ public class JsoupFirstTest {
     public void testString() throws Exception {
 
         // 使用工具类读取文件, 获取字符串
-        String content = FileUtils.readFileToString(new File("D:\\IDEA_projects\\blog_code\\doc\\test\\jsoup-test.html"), "utf-8");
+        String content = FileUtils.readFileToString(new File("doc/test/jsoup-test.html"), "utf-8");
 
         // 解析字符串
         Document doc = Jsoup.parse(content);
@@ -41,7 +41,7 @@ public class JsoupFirstTest {
     public void testFile() throws Exception {
 
         // 解析文件
-        Document doc = Jsoup.parse(new File("D:\\IDEA_projects\\blog_code\\doc\\test\\jsoup-test.html"), "utf-8");
+        Document doc = Jsoup.parse(new File("doc/test/jsoup-test.html"), "utf-8");
 
         String title = doc.getElementsByTag("title").first().text();
         System.out.println(title);
@@ -52,7 +52,7 @@ public class JsoupFirstTest {
     public void testDom() throws Exception {
 
         // 解析文件, 获取document对象
-        Document doc = Jsoup.parse(new File("D:\\IDEA_projects\\blog_code\\doc\\test\\jsoup-test.html"), "utf-8");
+        Document doc = Jsoup.parse(new File("doc/test/jsoup-test.html"), "utf-8");
 
         // 获取元素
 
