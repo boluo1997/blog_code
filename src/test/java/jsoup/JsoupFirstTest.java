@@ -149,6 +149,55 @@ public class JsoupFirstTest {
 
     }
 
+	@Test
+	public void testSelector2() throws Exception {
 
+    	// 解析文件, 获取document
+		Document doc = Jsoup.parse(new File("doc/test/jsoup-test.html"), "utf-8");
+
+		// 1. 元素+ID 查找元素
+		Elements elements1 = doc.select("h3#boluo");
+		for(Element e : elements1){
+			System.out.println(e.text());
+		}
+
+		// 2. 元素+class
+		Elements elements2 = doc.select("h3.class_boluo");
+		for(Element e : elements2){
+			System.out.println(e.text());
+		}
+
+		// 3.元素+属性名
+		Elements elements3 = doc.select("span[abcd]");
+		for(Element e : elements3){
+			System.out.println(e.text());
+		}
+
+		// 4.任意组合
+		Elements elements4 = doc.select("span[abcd].sname");
+		for(Element e : elements4){
+			System.out.println(e.text());
+		}
+
+		// 查找某个元素下的子元素 .class li
+		Elements elements5 = doc.select(".sname li");
+		for(Element e : elements5){
+			System.out.println(e.text());
+		}
+
+		// 查找某个父元素下的直接子元素
+		Elements elements6 = doc.select(".sname > ul > li");
+		for(Element e : elements6){
+			System.out.println(e.text());
+		}
+
+		// 查找某个父元素下所有直接子元素
+		Elements elements7 = doc.select(".sname > ul > *");
+		for(Element e : elements7){
+			System.out.println(e.text());
+		}
+
+
+	}
 
 }
