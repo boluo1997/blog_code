@@ -5,6 +5,7 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Attributes;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
 import org.junit.Test;
 
 import java.io.File;
@@ -115,7 +116,38 @@ public class JsoupFirstTest {
 	}
 
 
+	@Test
+	public void testSelector() throws Exception {
+		// 解析文件, 获取document
+		Document doc = Jsoup.parse(new File("doc/test/jsoup-test.html"), "utf-8");
 
+		// 1.通过标签查找元素
+		Elements elements1 = doc.select("span");
+		for(Element e : elements1){
+			System.out.println(e.text());
+		}
+
+		// 2.通过id查找元素
+		Elements elements2 = doc.select("#people");
+		for(Element e : elements2){
+			System.out.println(e.text());
+		}
+
+		// 3.通过class名称查找元素
+		Elements elements3 = doc.select(".test_class");
+		for(Element e : elements3){
+			System.out.println(e.text());
+		}
+
+		// 4.通过属性来获取
+		Element elements4 = doc.select("[abc]").first();
+		System.out.println(elements4.text());
+
+		// 5.利用属性值来查找元素
+		Element elements5 = doc.select("[abc=123]").first();
+		System.out.println(elements5.text());
+
+    }
 
 
 
