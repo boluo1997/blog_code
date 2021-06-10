@@ -113,7 +113,9 @@ public class Note07_Stream {
 
         // mapToInt
         Integer sumAge = list3.stream().mapToInt(i -> i - 5).sum();
+        Optional<Integer> sumAge2 = list3.stream().reduce(Integer::sum);
         System.out.println(sumAge);
+        System.out.println("sumAge2: " + sumAge2);
 
         // sorted
         List<User> list4 = list.stream().sorted((a, b) -> {
