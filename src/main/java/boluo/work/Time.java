@@ -54,6 +54,10 @@ public class Time {
         ZoneId zoneId = ZoneId.systemDefault();
         LocalDateTime tempLocalDateTime = LocalDateTime.ofInstant(instant, zoneId);
         Timestamp timestamp = Timestamp.valueOf(tempLocalDateTime);
+	    
+		// 时间戳转Timestamp
+		long audit_unix_timestamp = jn.at("/auditTime").asLong();
+		Timestamp auditTime = Timestamp.from(Instant.ofEpochMilli(audit_unix_timestamp));    
 
         // 创建固定时刻的Instant
         Instant newInstant = Timestamp.valueOf(LocalDateTime.of(1997, 3, 1, 12, 30)).toInstant();
