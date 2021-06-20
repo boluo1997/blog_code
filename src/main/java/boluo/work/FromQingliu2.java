@@ -209,7 +209,7 @@ public class FromQingliu2 {
 			// 判断3 是否有删除的
 			// 先找出线上有的数据, 但是本地没有的applyId
 			// TODO 删除Map
-			Map<Integer, Tuple2<Integer, String>> localApplyIdMap = Maps.newHashMap();
+//			Map<Integer, Tuple2<Integer, String>> localApplyIdMap = Maps.newHashMap();
 //			localApplyIdList.toLocalIterator().forEachRemaining(row -> {
 //				localApplyIdMap.put(row.getAs(0), Tuple2.apply(row.getAs(1), row.getAs(3)));
 //			});
@@ -288,7 +288,14 @@ public class FromQingliu2 {
 				List<JsonNode> updateLogIdList = Lists.newArrayList();
 				// TODO localApplyIdMap == null
 
-				int localMaxLogId = localApplyIdMap.isEmpty() ? -1 : localApplyIdMap.get(applyId)._1;
+                int localMaxLogId = -1;
+                String onlineBeforeStr = null;
+                for (Row row : localApplyIdList) {
+                    if(applyId == row.getAs(0)){
+                        localMaxLogId = row.getAs(1);
+                        onlineBeforeStr = row.getAs(3);
+                    }
+                }
 
 				// 获取qingliuLogIdNode中所有的qingliuLogId
 				for (JsonNode jn : qingliuLogIdNode.at("/result/auditRecords")) {
@@ -298,7 +305,6 @@ public class FromQingliu2 {
 					}
 				}
 
-				String onlineBeforeStr = localApplyIdMap.isEmpty() ? null : localApplyIdMap.get(applyId)._2;
 				ArrayNode onlineBefore = Strings.isNullOrEmpty(onlineBeforeStr)
 						? mapper.createArrayNode()
 						: (ArrayNode) mapper.readTree(onlineBeforeStr);
