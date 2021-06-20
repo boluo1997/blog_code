@@ -121,7 +121,7 @@ public class FromQingliu2 {
 						"where t.rk = 1 and cast(log_id as string) != 'D' ";
 				localApplyIdList = spark.sql(sql).collectAsList();
 			}
-			// TODO No1 is max ?
+
 			LocalDateTime localMaxUpdateTime;
 			if(localApplyIdList.isEmpty()){
 				Row maxRow = localApplyIdList.get(0);
@@ -130,12 +130,6 @@ public class FromQingliu2 {
 			}else {
 				localMaxUpdateTime = LocalDateTime.of(2016, 1, 1, 0, 0);
 			}
-
-//			List<Row> localMaxUpdateRow = localApplyIdList.select(max("audit_time").as("max_time"));
-//			Timestamp localMaxUpdate = (Timestamp) Optional.ofNullable(localMaxUpdateRow.first().getAs("max_time"))
-//					.orElse(Timestamp.valueOf(LocalDateTime.of(2016, 1, 1, 0, 0)));
-
-			// LocalDateTime localMaxUpdateTime = localMaxUpdate.toLocalDateTime().minusHours(1);
 
 			// 请求参数 - 分页查询
 			ObjectNode requestBody = mapper.createObjectNode()
@@ -214,14 +208,15 @@ public class FromQingliu2 {
 
 			// 判断3 是否有删除的
 			// 先找出线上有的数据, 但是本地没有的applyId
+			// TODO 删除Map
 			Map<Integer, Tuple2<Integer, String>> localApplyIdMap = Maps.newHashMap();
 //			localApplyIdList.toLocalIterator().forEachRemaining(row -> {
 //				localApplyIdMap.put(row.getAs(0), Tuple2.apply(row.getAs(1), row.getAs(3)));
 //			});
 
-			Set<Integer> currAddApplyIdSet = Sets.difference(
-					checkAnswersMap.keySet(),
-					localApplyIdList.stream().map(i->i.getAs(0)).collect(Collectors.toSet()));
+            Set<Integer> currAddApplyIdSet = Sets.difference(
+                    checkAnswersMap.keySet(),
+                    localApplyIdList.stream().map(i -> i.getAs(0)).collect(Collectors.toSet()));
 
 			Preconditions.checkArgument(localApplyIdList.size() + currAddApplyIdSet.size() >= applyIdCount, "数据异常...appId为: " + appId);
 			if (localApplyIdList.size() + currAddApplyIdSet.size() == applyIdCount) {
@@ -267,10 +262,15 @@ public class FromQingliu2 {
 				// 此时的checkAnswersMap中拥有线上全量的applyId
 
 				// 本地的 - 线上全部的 = 删除的
-				Set<Integer> deleteApplyIdSet = Sets.newCopyOnWriteArraySet(localApplyIdMap.keySet());
-				deleteApplyIdSet.removeAll(checkAnswersMap.keySet());
+//				Set<Integer> deleteApplyIdSet = Sets.newCopyOnWriteArraySet(localApplyIdMap.keySet());
+//				deleteApplyIdSet.removeAll(checkAnswersMap.keySet());
 
-				for (Integer applyId : deleteApplyIdSet) {
+                Set<Integer> deleteApplyId = Sets.difference(
+                        localApplyIdList.stream().map(i -> (Integer) i.getAs(0)).collect(Collectors.toSet()),
+                        checkAnswersMap.keySet()
+                );
+
+                for (Integer applyId : deleteApplyId) {
 					// TODO 给这些 applyId 添加删除行, logId = 'D'
 
 				}
