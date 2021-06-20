@@ -56,7 +56,7 @@ public class Time {
         Timestamp timestamp = Timestamp.valueOf(tempLocalDateTime);
 	    
 		// 时间戳转Timestamp
-		long audit_unix_timestamp = jn.at("/auditTime").asLong();
+		long audit_unix_timestamp = 1624170591L;
 		Timestamp auditTime = Timestamp.from(Instant.ofEpochMilli(audit_unix_timestamp));    
 
         // 创建固定时刻的Instant
