@@ -15,11 +15,12 @@ insert into titles_test values ('1', '10001', 'Senior Engineer', '1986-06-26', '
                                ('6', '10002', 'Staff', '1996-08-03', '9999-01-01'),
                                ('7', '10003', 'Senior Engineer', '1995-12-03', '9999-01-01');
 
-select *
-from titles_test
-where id in (
-    select min(id)
-    from titles_test
-    group by emp_no
-    order by id asc
-)
+delete from titles_test
+where id not in (
+    select *
+    from (
+        select min(id)
+        from titles_test
+        group by emp_no
+    ) a
+);
