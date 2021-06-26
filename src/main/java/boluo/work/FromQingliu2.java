@@ -670,43 +670,6 @@ public class FromQingliu2 {
                                 }
                             }
 
-                            // 遍历table2 把table1中没有但是table2中有的数据加入结果集中 (表格添加行)
-                            for (JsonNode temp3 : jn2.get().at("/tableValues")) {
-                                // jn2当前行数
-                                List<Integer> row2 = Lists.newArrayList();
-                                for (JsonNode temp4 : temp3) {
-                                    row2.add(temp4.at("/values/0/ordinal").asInt());
-                                }
-                                int rowNum2 = row2.isEmpty() ? -1 : row2.get(0);
-//
-//                                // 遍历table1
-//                                for (JsonNode temp1 : jn1.at("/tableValues")) {
-//                                    // jn1的当前行数
-//                                    List<Integer> row1 = Lists.newArrayList();
-//                                    for (JsonNode temp2 : temp1) {
-//                                        row1.add(temp2.at("/values/0/ordinal").asInt());
-//                                    }
-//                                    int rowNum1 = row1.isEmpty() ? -1 : row1.get(0);
-//
-//                                    // 添加table1中没有的table2中的数据
-//                                    if(rowNum1 != rowNum2){
-//                                        tempA.add(temp3);
-//                                    }
-//                                }
-
-                                Set<Integer> rowNum1Set = Sets.newHashSet();
-                                for (JsonNode temp1 : jn1.at("/tableValues")) {
-                                    for(JsonNode temp2 : temp1){
-                                        rowNum1Set.add(temp2.at("/values/0/oridinal").asInt());
-                                    }
-                                }
-
-                                if(!rowNum1Set.contains(rowNum1Set)){
-                                    tempA.add(temp3);
-                                }
-                            }
-
-
 //							for (int i = 0; i < jn2.get().at("/tableValues").size(); i++) {
 //								ArrayNode resultA = replace((ArrayNode) jn1.at("/tableValues/" + i), (ArrayNode) jn2.get().at("/tableValues/" + i));
 //								tempA.add(resultA);
@@ -746,7 +709,7 @@ public class FromQingliu2 {
             }
         }
 
-        // 遍历answer2
+        // 遍历answer2 处理添加的
         for (JsonNode jn2 : answer2) {
             // 有的不处理
             // 没有的添加
@@ -757,8 +720,65 @@ public class FromQingliu2 {
 
             if (!jn1.isPresent()) {
                 resultAnswer.add(jn2);
+            } else {
+
+                // 处理表格添加的
+
+                // 先遍历table2
+                for (JsonNode tempC : jn2) {
+                    // 先拿到table2当前行
+                    List<Integer> row2 = Lists.newArrayList();
+                    for (JsonNode tempD : tempC) {
+                        row2.add(tempD.at("/values/0/ordinal").asInt());
+                    }
+                    int rowNum2 = row2.isEmpty() ? -1 : row2.get(0);
+
+                    for (JsonNode tempA : jn1.get().at("/tableValues")) {
+                        // 再拿到table1 该queId下的tableValues的行数
+                        Set<Integer> rowNum1Set = Sets.newHashSet();
+                        for (JsonNode tempB : tempA) {
+                            rowNum1Set.add(tempB.at("/values/0/ordinal").asInt());
+                        }
+
+                        if (rowNum1Set.contains(rowNum2)) {
+                            if (tempC.at("/values/" + rowNum2 + "/value").isArray() && tempC.at("/values/" + rowNum2 + "/value").size() > 0){
+
+                            }
+                        }
+                    }
+
+
+                }
+
+
             }
+
+
         }
+
+        // 遍历table2 把table1中没有但是table2中有的数据加入结果集中 (表格添加行)
+//        for (JsonNode temp3 : jn2.get().at("/tableValues")) {
+//            // jn2当前行数
+//            List<Integer> row2 = Lists.newArrayList();
+//            for (JsonNode temp4 : temp3) {
+//                row2.add(temp4.at("/values/0/ordinal").asInt());
+//            }
+//            int rowNum2 = row2.isEmpty() ? -1 : row2.get(0);
+//
+//            Set<Integer> rowNum1Set = Sets.newHashSet();
+//            for (JsonNode temp1 : jn1.at("/tableValues")) {
+//                for (JsonNode temp2 : temp1) {
+//                    rowNum1Set.add(temp2.at("/values/0/oridinal").asInt());
+//                }
+//            }
+//
+//            if (!rowNum1Set.contains(rowNum2)) {
+//                if (temp3.at("/values/" + rowNum2 + "/value").isArray() && temp3.at("/values/" + rowNum2 + "/value").size() > 0) {
+//                    tempA.add(temp3);
+//                }
+//
+//            }
+//        }
 
         return resultAnswer;
     }
