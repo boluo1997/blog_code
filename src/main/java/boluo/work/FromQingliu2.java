@@ -777,8 +777,8 @@ public class FromQingliu2 {
                         ArrayNode tempB = mapper.createArrayNode();
                         for (JsonNode tempI : tempO) {
                             // if (tempI.at("/queId").asInt() == tempO.at("/queId").asInt()) {
-                            //if (tempI.at("/values").isArray() && tempI.at("/values").size() != 0) {
-                            tempB.add(tempI);
+//                            if (tempI.at("/values").isArray() && tempI.at("/values").size() != 0) {
+                                tempB.add(tempI);
 //							} else {
 //								ObjectNode o = mapper.createObjectNode()
 //										.put("queId", tempI.at("/queId").asInt())
@@ -812,9 +812,9 @@ public class FromQingliu2 {
                             ObjectNode objectNodeT = mapper.createObjectNode();
                             objectNodeT.put("queId", tempC.at("/queId").asInt())
                                     .put("queType", tempC.at("/queType").asInt());
-                            // .putNull("values");
+
                             ArrayNode tmpB = objectNodeT.withArray("values");
-                            tmpB.add(mapper.createObjectNode().putNull("value"));
+                            tmpB.add(mapper.createObjectNode().putNull("value").put("ordinal", tempC.at("/values/0/ordinal").asInt()));
 
                             tempB.add(objectNodeT);
                         }
