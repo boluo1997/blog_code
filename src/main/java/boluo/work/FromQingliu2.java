@@ -722,32 +722,49 @@ public class FromQingliu2 {
                 resultAnswer.add(jn2);
             } else {
 
-                // 处理表格添加的
+                // 处理表格添加的 先遍历结果
 
-                // 先遍历table2
-                for (JsonNode tempC : jn2) {
-                    // 先拿到table2当前行
-                    List<Integer> row2 = Lists.newArrayList();
-                    for (JsonNode tempD : tempC) {
-                        row2.add(tempD.at("/values/0/ordinal").asInt());
-                    }
-                    int rowNum2 = row2.isEmpty() ? -1 : row2.get(0);
+                Optional<ObjectNode> jnRes = Streams.stream(resultAnswer).filter(i -> {
+                    return i.at("/queId").asInt() == jn2.at("/queId").asInt();
+                }).map(i -> (ObjectNode) i).findAny();
 
-                    for (JsonNode tempA : jn1.get().at("/tableValues")) {
-                        // 再拿到table1 该queId下的tableValues的行数
-                        Set<Integer> rowNum1Set = Sets.newHashSet();
-                        for (JsonNode tempB : tempA) {
-                            rowNum1Set.add(tempB.at("/values/0/ordinal").asInt());
+                if (jnRes.isPresent()) {
+
+                    // 先遍历table2
+                    for (JsonNode tempC : jn2.at("/tableValues")) {
+                        // 先拿到table2当前行
+                        List<Integer> row2 = Lists.newArrayList();
+                        for (JsonNode tempD : tempC) {
+                            row2.add(tempD.at("/values/0/ordinal").asInt());
                         }
+                        int rowNum2 = row2.isEmpty() ? -1 : row2.get(0);
 
-                        if (rowNum1Set.contains(rowNum2)) {
-                            if (tempC.at("/values/" + rowNum2 + "/value").isArray() && tempC.at("/values/" + rowNum2 + "/value").size() > 0){
-
+                        Set<Integer> rowNum1Set = Sets.newHashSet();
+                        for (JsonNode tempA : jn1.get().at("/tableValues")) {
+                            // 再拿到table1 该queId下的tableValues的行数
+                            for (JsonNode t : tempA) {
+                                rowNum1Set.add(t.at("/values/0/ordinal").asInt());
                             }
                         }
+
+                        if (!rowNum1Set.contains(rowNum2)) {
+                            ArrayNode res = jnRes.get().withArray("tableValues");
+                            ArrayNode resArray = mapper.createArrayNode();
+                            for (JsonNode tempD : tempC) {
+
+
+                                if (tempD.at("/values").isArray() && tempD.at("/values").size() > 0) {
+                                    resArray.add(tempD);
+
+                                }
+
+                            }
+                            res.add(resArray);
+
+                        }
+
+
                     }
-
-
                 }
 
 
