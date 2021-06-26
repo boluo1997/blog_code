@@ -668,8 +668,6 @@ public class FromQingliu2 {
 
                                     }
                                 }
-
-
                             }
 
 //							for (int i = 0; i < jn2.get().at("/tableValues").size(); i++) {
@@ -679,6 +677,7 @@ public class FromQingliu2 {
 //							}
 
                         }
+
                     }
 
 //					ObjectNode copy = jn1.deepCopy();
@@ -710,7 +709,7 @@ public class FromQingliu2 {
             }
         }
 
-        // 遍历answer2
+        // 遍历answer2 处理添加的
         for (JsonNode jn2 : answer2) {
             // 有的不处理
             // 没有的添加
@@ -721,8 +720,82 @@ public class FromQingliu2 {
 
             if (!jn1.isPresent()) {
                 resultAnswer.add(jn2);
+            } else {
+
+                // 处理表格添加的 先遍历结果
+
+                Optional<ObjectNode> jnRes = Streams.stream(resultAnswer).filter(i -> {
+                    return i.at("/queId").asInt() == jn2.at("/queId").asInt();
+                }).map(i -> (ObjectNode) i).findAny();
+
+                if (jnRes.isPresent()) {
+
+                    // 先遍历table2
+                    for (JsonNode tempC : jn2.at("/tableValues")) {
+                        // 先拿到table2当前行
+                        List<Integer> row2 = Lists.newArrayList();
+                        for (JsonNode tempD : tempC) {
+                            row2.add(tempD.at("/values/0/ordinal").asInt());
+                        }
+                        int rowNum2 = row2.isEmpty() ? -1 : row2.get(0);
+
+                        Set<Integer> rowNum1Set = Sets.newHashSet();
+                        for (JsonNode tempA : jn1.get().at("/tableValues")) {
+                            // 再拿到table1 该queId下的tableValues的行数
+                            for (JsonNode t : tempA) {
+                                rowNum1Set.add(t.at("/values/0/ordinal").asInt());
+                            }
+                        }
+
+                        if (!rowNum1Set.contains(rowNum2)) {
+                            ArrayNode res = jnRes.get().withArray("tableValues");
+                            ArrayNode resArray = mapper.createArrayNode();
+                            for (JsonNode tempD : tempC) {
+
+
+                                if (tempD.at("/values").isArray() && tempD.at("/values").size() > 0) {
+                                    resArray.add(tempD);
+
+                                }
+
+                            }
+                            res.add(resArray);
+
+                        }
+
+
+                    }
+                }
+
+
             }
+
+
         }
+
+        // 遍历table2 把table1中没有但是table2中有的数据加入结果集中 (表格添加行)
+//        for (JsonNode temp3 : jn2.get().at("/tableValues")) {
+//            // jn2当前行数
+//            List<Integer> row2 = Lists.newArrayList();
+//            for (JsonNode temp4 : temp3) {
+//                row2.add(temp4.at("/values/0/ordinal").asInt());
+//            }
+//            int rowNum2 = row2.isEmpty() ? -1 : row2.get(0);
+//
+//            Set<Integer> rowNum1Set = Sets.newHashSet();
+//            for (JsonNode temp1 : jn1.at("/tableValues")) {
+//                for (JsonNode temp2 : temp1) {
+//                    rowNum1Set.add(temp2.at("/values/0/oridinal").asInt());
+//                }
+//            }
+//
+//            if (!rowNum1Set.contains(rowNum2)) {
+//                if (temp3.at("/values/" + rowNum2 + "/value").isArray() && temp3.at("/values/" + rowNum2 + "/value").size() > 0) {
+//                    tempA.add(temp3);
+//                }
+//
+//            }
+//        }
 
         return resultAnswer;
     }
@@ -778,7 +851,7 @@ public class FromQingliu2 {
                         for (JsonNode tempI : tempO) {
                             // if (tempI.at("/queId").asInt() == tempO.at("/queId").asInt()) {
 //                            if (tempI.at("/values").isArray() && tempI.at("/values").size() != 0) {
-                                tempB.add(tempI);
+                            tempB.add(tempI);
 //							} else {
 //								ObjectNode o = mapper.createObjectNode()
 //										.put("queId", tempI.at("/queId").asInt())
