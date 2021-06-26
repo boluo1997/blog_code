@@ -164,6 +164,14 @@
             <version>4.12</version>
         </dependency>
 
+        <!-- https://mvnrepository.com/artifact/org.assertj/assertj-core -->
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <version>3.20.2</version>
+            <scope>test</scope>
+        </dependency>
+
         <!-- 解决 NoClassDefFoundError -->
         <dependency>
             <groupId>org.codehaus.janino</groupId>
