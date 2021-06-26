@@ -668,9 +668,33 @@ public class FromQingliu2 {
 
                                     }
                                 }
-
-
                             }
+
+                            // 遍历table2 把table1中没有但是table2中有的数据加入结果集中 (表格添加行)
+                            for (JsonNode temp3 : jn2.get().at("/tableValues")) {
+                                // jn2当前行数
+                                List<Integer> row2 = Lists.newArrayList();
+                                for (JsonNode temp4 : temp3) {
+                                    row2.add(temp4.at("/values/0/ordinal").asInt());
+                                }
+                                int rowNum2 = row2.isEmpty() ? -1 : row2.get(0);
+
+                                // 遍历table1
+                                for (JsonNode temp1 : jn1.at("/tableValues")) {
+                                    // jn1的当前行数
+                                    List<Integer> row1 = Lists.newArrayList();
+                                    for (JsonNode temp2 : temp1) {
+                                        row1.add(temp2.at("/values/0/ordinal").asInt());
+                                    }
+                                    int rowNum1 = row1.isEmpty() ? -1 : row1.get(0);
+
+                                    // 添加table1中没有的table2中的数据
+                                    if(rowNum1 != rowNum2){
+                                        tempA.add(temp3);
+                                    }
+                                }
+                            }
+
 
 //							for (int i = 0; i < jn2.get().at("/tableValues").size(); i++) {
 //								ArrayNode resultA = replace((ArrayNode) jn1.at("/tableValues/" + i), (ArrayNode) jn2.get().at("/tableValues/" + i));
@@ -778,7 +802,7 @@ public class FromQingliu2 {
                         for (JsonNode tempI : tempO) {
                             // if (tempI.at("/queId").asInt() == tempO.at("/queId").asInt()) {
 //                            if (tempI.at("/values").isArray() && tempI.at("/values").size() != 0) {
-                                tempB.add(tempI);
+                            tempB.add(tempI);
 //							} else {
 //								ObjectNode o = mapper.createObjectNode()
 //										.put("queId", tempI.at("/queId").asInt())
