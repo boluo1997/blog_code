@@ -678,20 +678,31 @@ public class FromQingliu2 {
                                     row2.add(temp4.at("/values/0/ordinal").asInt());
                                 }
                                 int rowNum2 = row2.isEmpty() ? -1 : row2.get(0);
+//
+//                                // 遍历table1
+//                                for (JsonNode temp1 : jn1.at("/tableValues")) {
+//                                    // jn1的当前行数
+//                                    List<Integer> row1 = Lists.newArrayList();
+//                                    for (JsonNode temp2 : temp1) {
+//                                        row1.add(temp2.at("/values/0/ordinal").asInt());
+//                                    }
+//                                    int rowNum1 = row1.isEmpty() ? -1 : row1.get(0);
+//
+//                                    // 添加table1中没有的table2中的数据
+//                                    if(rowNum1 != rowNum2){
+//                                        tempA.add(temp3);
+//                                    }
+//                                }
 
-                                // 遍历table1
+                                Set<Integer> rowNum1Set = Sets.newHashSet();
                                 for (JsonNode temp1 : jn1.at("/tableValues")) {
-                                    // jn1的当前行数
-                                    List<Integer> row1 = Lists.newArrayList();
-                                    for (JsonNode temp2 : temp1) {
-                                        row1.add(temp2.at("/values/0/ordinal").asInt());
+                                    for(JsonNode temp2 : temp1){
+                                        rowNum1Set.add(temp2.at("/values/0/oridinal").asInt());
                                     }
-                                    int rowNum1 = row1.isEmpty() ? -1 : row1.get(0);
+                                }
 
-                                    // 添加table1中没有的table2中的数据
-                                    if(rowNum1 != rowNum2){
-                                        tempA.add(temp3);
-                                    }
+                                if(!rowNum1Set.contains(rowNum1Set)){
+                                    tempA.add(temp3);
                                 }
                             }
 
@@ -703,6 +714,7 @@ public class FromQingliu2 {
 //							}
 
                         }
+
                     }
 
 //					ObjectNode copy = jn1.deepCopy();
