@@ -669,24 +669,8 @@ public class FromQingliu2 {
                                     }
                                 }
                             }
-
-//							for (int i = 0; i < jn2.get().at("/tableValues").size(); i++) {
-//								ArrayNode resultA = replace((ArrayNode) jn1.at("/tableValues/" + i), (ArrayNode) jn2.get().at("/tableValues/" + i));
-//								tempA.add(resultA);
-//								// tempA.add(jn2.get().at("/tableValues/" + i));
-//							}
-
                         }
-
                     }
-
-//					ObjectNode copy = jn1.deepCopy();
-//					copy.setAll(jn2.get());
-//					if (tempA.size() > 0) {
-//						copy.set("tableValues", tempA);
-//					}
-//					copy.put("queId", jn2.get().at("/queId").asInt());
-//					resultAnswer.add(copy);
 
                     if (!jn2.get().at("/values/0/value").isNull()) {
                         resultAnswer.add(jn2.get());
@@ -697,8 +681,6 @@ public class FromQingliu2 {
                                     .put("queType", jn2.get().at("/queType").asInt());
                             obj.set("tableValues", tempA);
                             resultAnswer.add(obj);
-                            // copy.set("tableValues", tempA);
-
                         }
                     }
 
@@ -751,52 +733,16 @@ public class FromQingliu2 {
                             ArrayNode res = jnRes.get().withArray("tableValues");
                             ArrayNode resArray = mapper.createArrayNode();
                             for (JsonNode tempD : tempC) {
-
-
                                 if (tempD.at("/values").isArray() && tempD.at("/values").size() > 0) {
                                     resArray.add(tempD);
-
                                 }
-
                             }
                             res.add(resArray);
-
                         }
-
-
                     }
                 }
-
-
             }
-
-
         }
-
-        // 遍历table2 把table1中没有但是table2中有的数据加入结果集中 (表格添加行)
-//        for (JsonNode temp3 : jn2.get().at("/tableValues")) {
-//            // jn2当前行数
-//            List<Integer> row2 = Lists.newArrayList();
-//            for (JsonNode temp4 : temp3) {
-//                row2.add(temp4.at("/values/0/ordinal").asInt());
-//            }
-//            int rowNum2 = row2.isEmpty() ? -1 : row2.get(0);
-//
-//            Set<Integer> rowNum1Set = Sets.newHashSet();
-//            for (JsonNode temp1 : jn1.at("/tableValues")) {
-//                for (JsonNode temp2 : temp1) {
-//                    rowNum1Set.add(temp2.at("/values/0/oridinal").asInt());
-//                }
-//            }
-//
-//            if (!rowNum1Set.contains(rowNum2)) {
-//                if (temp3.at("/values/" + rowNum2 + "/value").isArray() && temp3.at("/values/" + rowNum2 + "/value").size() > 0) {
-//                    tempA.add(temp3);
-//                }
-//
-//            }
-//        }
-
         return resultAnswer;
     }
 
@@ -837,21 +783,29 @@ public class FromQingliu2 {
 
             } else {
                 // 处理表格
+                arrayNode = tableGetPatchAnswer(before, after, arrayNode.deepCopy(), objectNode.deepCopy(), jn2);
+            }
+        }
 
-                objectNode.put("queId", jn2.at("/queId").asInt())
-                        .put("queType", jn2.at("/queType").asInt());
-                ArrayNode tempA = objectNode.withArray("tableValues");
+        return arrayNode;
+    }
 
-                if (before.isNull() && !after.isNull()) {
+    private static ArrayNode tableGetPatchAnswer(JsonNode before, JsonNode after, ArrayNode arrayNode, ObjectNode objectNode, JsonNode jn2){
+
+        objectNode.put("queId", jn2.at("/queId").asInt())
+                .put("queType", jn2.at("/queType").asInt());
+        ArrayNode tempA = objectNode.withArray("tableValues");
+
+        if (before.isNull() && !after.isNull()) {
 
 
-                    // 遍历after 把after中的值传出
-                    for (JsonNode tempO : after.at("/tableValues")) {
-                        ArrayNode tempB = mapper.createArrayNode();
-                        for (JsonNode tempI : tempO) {
-                            // if (tempI.at("/queId").asInt() == tempO.at("/queId").asInt()) {
+            // 遍历after 把after中的值传出
+            for (JsonNode tempO : after.at("/tableValues")) {
+                ArrayNode tempB = mapper.createArrayNode();
+                for (JsonNode tempI : tempO) {
+                    // if (tempI.at("/queId").asInt() == tempO.at("/queId").asInt()) {
 //                            if (tempI.at("/values").isArray() && tempI.at("/values").size() != 0) {
-                            tempB.add(tempI);
+                    tempB.add(tempI);
 //							} else {
 //								ObjectNode o = mapper.createObjectNode()
 //										.put("queId", tempI.at("/queId").asInt())
@@ -860,70 +814,67 @@ public class FromQingliu2 {
 //								a.add(mapper.createObjectNode().putNull("value"));
 //								tempB.add(o);
 //							}
-                        }
-                        tempA.add(tempB);
-                    }
-                    arrayNode.add(objectNode);
+                }
+                tempA.add(tempB);
+            }
+            arrayNode.add(objectNode);
+        }
+
+        for (JsonNode jn : before.at("/tableValues")) {
+
+            ArrayNode tempB = mapper.createArrayNode();
+
+            List<Integer> row = Lists.newArrayList();
+            for (JsonNode tempC : jn) {
+                // 当前行数
+                row.add(tempC.at("/values/0/ordinal").asInt());
+            }
+
+            int rowNum = row.get(0);
+            JsonNode afterTable = after.at("/tableValues/" + rowNum);
+            for (JsonNode tempC : jn) {
+
+                if (afterTable.isMissingNode()) {
+
+                    ObjectNode objectNodeT = mapper.createObjectNode();
+                    objectNodeT.put("queId", tempC.at("/queId").asInt())
+                            .put("queType", tempC.at("/queType").asInt());
+
+                    ArrayNode tmpB = objectNodeT.withArray("values");
+                    tmpB.add(mapper.createObjectNode().putNull("value").put("ordinal", tempC.at("/values/0/ordinal").asInt()));
+
+                    tempB.add(objectNodeT);
                 }
 
-                for (JsonNode jn : before.at("/tableValues")) {
+                for (JsonNode tempD : afterTable) {
+                    if (tempD.at("/queId").asInt() == tempC.at("/queId").asInt()) {
 
-                    ArrayNode tempB = mapper.createArrayNode();
+                        if (tempC.isNull() && tempD.isNull()) {
 
-                    List<Integer> row = Lists.newArrayList();
-                    for (JsonNode tempC : jn) {
-                        // 当前行数
-                        row.add(tempC.at("/values/0/ordinal").asInt());
-                    }
-
-                    int rowNum = row.get(0);
-                    JsonNode afterTable = after.at("/tableValues/" + rowNum);
-                    for (JsonNode tempC : jn) {
-
-                        if (afterTable.isMissingNode()) {
-
-                            ObjectNode objectNodeT = mapper.createObjectNode();
-                            objectNodeT.put("queId", tempC.at("/queId").asInt())
-                                    .put("queType", tempC.at("/queType").asInt());
-
-                            ArrayNode tmpB = objectNodeT.withArray("values");
-                            tmpB.add(mapper.createObjectNode().putNull("value").put("ordinal", tempC.at("/values/0/ordinal").asInt()));
-
-                            tempB.add(objectNodeT);
-                        }
-
-                        for (JsonNode tempD : afterTable) {
-                            if (tempD.at("/queId").asInt() == tempC.at("/queId").asInt()) {
-
-                                if (tempC.isNull() && tempD.isNull()) {
-
-                                } else if (!tempC.isNull() && tempD.isNull()) {
-                                    if (tempC.at("/values").isArray() && tempC.size() != 0) {
-                                        tempB.add(objectNode);
-                                    }
-                                } else if (tempC.isNull() && !tempD.isNull()) {
-                                    if (tempD.at("/values").isArray() && tempD.at("/values").size() != 0) {
-                                        tempB.add(tempD);
-                                    }
-                                } else {
-                                    if (tempD.at("/values").isArray() && tempD.at("/values").size() != 0) {
-                                        tempB.add(tempD);
-                                    }
-                                }
+                        } else if (!tempC.isNull() && tempD.isNull()) {
+                            if (tempC.at("/values").isArray() && tempC.size() != 0) {
+                                tempB.add(objectNode);
+                            }
+                        } else if (tempC.isNull() && !tempD.isNull()) {
+                            if (tempD.at("/values").isArray() && tempD.at("/values").size() != 0) {
+                                tempB.add(tempD);
+                            }
+                        } else {
+                            if (tempD.at("/values").isArray() && tempD.at("/values").size() != 0) {
+                                tempB.add(tempD);
                             }
                         }
                     }
-
-                    tempA.add(tempB);
                 }
-
-                boolean br = !(before.isNull() && after.isNull()) && !((before.isNull() && !after.isNull()));
-                // if (!(before.isNull() && after.isNull())) {
-                if (br) {
-                    arrayNode.add(objectNode);
-                }
-
             }
+
+            tempA.add(tempB);
+        }
+
+        boolean br = !(before.isNull() && after.isNull()) && !((before.isNull() && !after.isNull()));
+        // if (!(before.isNull() && after.isNull())) {
+        if (br) {
+            arrayNode.add(objectNode);
         }
 
         return arrayNode;
