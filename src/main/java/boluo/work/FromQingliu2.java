@@ -348,12 +348,12 @@ public class FromQingliu2 {
                 );
                 ObjectNode auditRecordResult = formatAuditRecordDetail(webAuditRecordResult);
 
-                ArrayNode beforeAnswer = getPatchAnswer((ArrayNode) auditRecordResult.at("/auditModifies"), "beforeAnswer", "beforeAnswer");
-                ArrayNode afterAnswer = getPatchAnswer((ArrayNode) auditRecordResult.at("/auditModifies"), "beforeAnswer", "afterAnswer");
-
-                if (logId == 1592977) {
+                if (logId == 1593432) {
                     System.out.println("aaa");
                 }
+
+                ArrayNode beforeAnswer = getPatchAnswer((ArrayNode) auditRecordResult.at("/auditModifies"), "beforeAnswer", "beforeAnswer");
+                ArrayNode afterAnswer = getPatchAnswer((ArrayNode) auditRecordResult.at("/auditModifies"), "beforeAnswer", "afterAnswer");
 
                 // 第一次校验
                 assertCompare(onlineBefore, replace(onlineBefore, beforeAnswer));
@@ -541,7 +541,7 @@ public class FromQingliu2 {
                         boolean br_table_values = (jn1.at("/tableValues").isMissingNode() && !jn2.at("/tableValues").isMissingNode())
                                 || (!jn1.at("/tableValues").isMissingNode() && jn2.at("/tableValues").isMissingNode());
 
-                        br = br && !br_table_values;
+                        // br = br && !br_table_values;
 
                         if (jn2.at("/tableValues").isMissingNode() && jn1.at("/tableValues").isMissingNode()) {
                             continue;
@@ -621,7 +621,7 @@ public class FromQingliu2 {
         for (JsonNode jn1 : answer1) {
 
             Optional<ObjectNode> jn2 = Streams.stream(answer2).filter(i -> {
-                return i.at("/queId").asInt() == jn1.at("/queId").asInt();
+                return i.at("/queId").asInt() == jn1.at("/queId").asInt() && i.at("/queType").asInt() == jn1.at("/queType").asInt();
             }).map(i -> (ObjectNode) i).findAny();
 
             if (jn2.isPresent()) {
@@ -645,6 +645,16 @@ public class FromQingliu2 {
                         } else if (jn2.get().at("/tableValues").size() > 0) {
                             // jn2的表格中有数据, 按行列逐个替换jn1中的表格数据, jn2中没有的不替换
 
+                            // 取jn2所有行数
+                            Set<Integer> row2Set = Sets.newHashSet();
+                            for (JsonNode j : answer2) {
+                                for (JsonNode jn : j.at("/tableValues")) {
+                                    for (JsonNode rowJn : jn) {
+                                        row2Set.add(rowJn.at("/values/0/ordinal").asInt());
+                                    }
+                                }
+                            }
+
                             for (JsonNode temp1 : jn1.at("/tableValues")) {
                                 // jn1当前行数
                                 List<Integer> row1 = Lists.newArrayList();
@@ -665,23 +675,29 @@ public class FromQingliu2 {
                                     if (rowNum1 == rowNum2) {
                                         ArrayNode resultA = replace((ArrayNode) temp1, (ArrayNode) temp3);
                                         tempA.add(resultA);
-
                                     }
                                 }
+
+                                // 如果jn1当前行数在jn2中没有, 添加jn1行的数据
+                                if (!row2Set.contains(rowNum1)) {
+                                    tempA.add(temp1);
+                                }
+
                             }
                         }
                     }
 
                     if (!jn2.get().at("/values/0/value").isNull()) {
-                        resultAnswer.add(jn2.get());
                         if (tempA.size() > 0) {
-                            resultAnswer = mapper.createArrayNode();
                             ObjectNode obj = mapper.createObjectNode();
                             obj.put("queId", jn2.get().at("/queId").asInt())
                                     .put("queType", jn2.get().at("/queType").asInt());
                             obj.set("tableValues", tempA);
                             resultAnswer.add(obj);
+                        } else {
+                            resultAnswer.add(jn2.get());
                         }
+
                     }
 
                 }
@@ -697,17 +713,17 @@ public class FromQingliu2 {
             // 没有的添加
 
             Optional<ObjectNode> jn1 = Streams.stream(answer1).filter(i -> {
-                return i.at("/queId").asInt() == jn2.at("/queId").asInt();
+                return i.at("/queId").asInt() == jn2.at("/queId").asInt() && i.at("/queType").asInt() == jn2.at("/queType").asInt();
             }).map(i -> (ObjectNode) i).findAny();
 
             if (!jn1.isPresent()) {
                 resultAnswer.add(jn2);
             } else {
 
-                // 处理表格添加的 先遍历结果
+                // 处理表格添加的 (增加行) 先遍历结果
 
                 Optional<ObjectNode> jnRes = Streams.stream(resultAnswer).filter(i -> {
-                    return i.at("/queId").asInt() == jn2.at("/queId").asInt();
+                    return i.at("/queId").asInt() == jn2.at("/queId").asInt() && i.at("/queType").asInt() == jn2.at("/queType").asInt();
                 }).map(i -> (ObjectNode) i).findAny();
 
                 if (jnRes.isPresent()) {
@@ -790,14 +806,21 @@ public class FromQingliu2 {
         return arrayNode;
     }
 
-    private static ArrayNode tableGetPatchAnswer(JsonNode before, JsonNode after, ArrayNode arrayNode, ObjectNode objectNode, JsonNode jn2){
+    /**
+     * @param before
+     * @param after
+     * @param arrayNode
+     * @param objectNode
+     * @param jn2
+     * @return
+     */
+    private static ArrayNode tableGetPatchAnswer(JsonNode before, JsonNode after, ArrayNode arrayNode, ObjectNode objectNode, JsonNode jn2) {
 
         objectNode.put("queId", jn2.at("/queId").asInt())
                 .put("queType", jn2.at("/queType").asInt());
         ArrayNode tempA = objectNode.withArray("tableValues");
 
         if (before.isNull() && !after.isNull()) {
-
 
             // 遍历after 把after中的值传出
             for (JsonNode tempO : after.at("/tableValues")) {
@@ -827,23 +850,49 @@ public class FromQingliu2 {
             List<Integer> row = Lists.newArrayList();
             for (JsonNode tempC : jn) {
                 // 当前行数
-                row.add(tempC.at("/values/0/ordinal").asInt());
+                if (tempC.at("/values").isArray() && tempC.at("/values").size() != 0) {
+                    row.add(tempC.at("/values/0/ordinal").asInt());
+                }
             }
 
             int rowNum = row.get(0);
             JsonNode afterTable = after.at("/tableValues/" + rowNum);
             for (JsonNode tempC : jn) {
 
-                if (afterTable.isMissingNode()) {
+                // afterTable的所有行
+                Set<Integer> rowAft = Sets.newHashSet();
+                for (JsonNode rowJn : after.at("/tableValues")) {
+                    for (JsonNode rowJ : rowJn) {
+                        if (rowJ.at("/values").isArray() && rowJ.size() != 0) {
+                            rowAft.add(rowJ.at("/values/0/ordinal").asInt());
+                        }
+                    }
+                }
+
+                // 如果answer1中table的行数answer2中没有
+                if (!rowAft.contains(rowNum)) {
+                    ObjectNode objectNodeT = mapper.createObjectNode();
+                    objectNodeT.put("queId", tempC.at("/queId").asInt())
+                            .put("queType", tempC.at("/queType").asInt());
+
+                    ArrayNode tmpB = objectNodeT.withArray("values");
+                    tmpB.add(mapper.createObjectNode().putNull("value").put("ordinal", rowNum));
+                    tempB.add(objectNodeT);
+                } else if (afterTable.isMissingNode()) {
 
                     ObjectNode objectNodeT = mapper.createObjectNode();
                     objectNodeT.put("queId", tempC.at("/queId").asInt())
                             .put("queType", tempC.at("/queType").asInt());
 
                     ArrayNode tmpB = objectNodeT.withArray("values");
-                    tmpB.add(mapper.createObjectNode().putNull("value").put("ordinal", tempC.at("/values/0/ordinal").asInt()));
+                    // tmpB.add(mapper.createObjectNode().putNull("value").put("ordinal", rowNum));
+                    if (tempC.at("/values").isArray() && tempC.at("/values").size() != 0) {
+                        tmpB.add(tempC.at("/values/0"));
+                    }
+                    if (objectNodeT.at("/values").isArray() && objectNodeT.at("/values").size() != 0) {
+                        tempB.add(objectNodeT);
+                    }
 
-                    tempB.add(objectNodeT);
                 }
 
                 for (JsonNode tempD : afterTable) {
@@ -852,24 +901,67 @@ public class FromQingliu2 {
                         if (tempC.isNull() && tempD.isNull()) {
 
                         } else if (!tempC.isNull() && tempD.isNull()) {
-                            if (tempC.at("/values").isArray() && tempC.size() != 0) {
+                            if (tempC.at("/values").isArray() && tempC.size() != 0 && !tempC.at("/values/0/value").isNull()) {
                                 tempB.add(objectNode);
                             }
                         } else if (tempC.isNull() && !tempD.isNull()) {
-                            if (tempD.at("/values").isArray() && tempD.at("/values").size() != 0) {
+                            if (tempD.at("/values").isArray() && tempD.at("/values").size() != 0 && !tempD.at("/values/0/value").isNull()) {
                                 tempB.add(tempD);
                             }
                         } else {
-                            if (tempD.at("/values").isArray() && tempD.at("/values").size() != 0) {
+                            if (tempD.at("/values").isArray() && tempD.at("/values").size() != 0 && !tempD.at("/values/0/value").isNull()) {
                                 tempB.add(tempD);
                             }
                         }
                     }
                 }
+
+
             }
 
             tempA.add(tempB);
         }
+
+        if (!before.isNull()) {
+            // 先拿before中所有的行
+            Set<Integer> rowBef = Sets.newHashSet();
+            for (JsonNode bef : before.at("/tableValues")) {
+                for (JsonNode rowJn : bef) {
+                    if (rowJn.at("/values").isArray() && rowJn.at("/values").size() != 0) {
+                        rowBef.add(rowJn.at("/values/0/ordinal").asInt());
+                    }
+                }
+            }
+
+            // 遍历after, 添加after中有, before中没有的行  (2 -> 4)
+
+            for (JsonNode aft : after.at("/tableValues")) {
+                ArrayNode tempB = mapper.createArrayNode();
+                // 拿到after当前行
+                List<Integer> rowAft = Lists.newArrayList();
+                for (JsonNode rowJn : aft) {
+                    if (rowJn.at("/values").isArray() && rowJn.at("/values").size() != 0) {
+                        rowAft.add(rowJn.at("/values/0/ordinal").asInt());
+                    }
+                }
+                int rowAfterNum = rowAft.get(0);
+
+                // 如果after当前行在before中没有, 则添加after
+                if (!rowBef.contains(rowAfterNum)) {
+                    for (JsonNode jn : aft) {
+                        if (jn.at("/values").isArray() && jn.at("/values").size() > 0 && !jn.at("/values/0/value").isNull()) {
+                            tempB.add(jn);
+                        }
+                    }
+                }
+                if (tempB.size() > 0) {
+                    tempA.add(tempB);
+                }
+            }
+
+
+        }
+
 
         boolean br = !(before.isNull() && after.isNull()) && !((before.isNull() && !after.isNull()));
         // if (!(before.isNull() && after.isNull())) {
@@ -879,7 +971,6 @@ public class FromQingliu2 {
 
         return arrayNode;
     }
-
     @SuppressWarnings("unchecked")
     private static <T> T getValue(ArrayNode answer, String key) {
 
