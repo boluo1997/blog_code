@@ -46,7 +46,7 @@ public class QingliuTest2 {
         ObjectNode result2 = kvT(0, 2,
                 kv(1, 8, "v1m"), kv(2, 8, "v2"),
                 kv(1, 8, "x1m"), kv(2, 8, "x2"));
-        Assert.assertEquals(array(result2), replace.invoke(null, array(value2), array(patch2)));
+        Assert.assertEquals(array(result1, result2), replace.invoke(null, array(value1, value2), array(patch1, patch2)));
 
         ///////////////////////
 
@@ -226,11 +226,13 @@ public class QingliuTest2 {
                 .put("queId", 4)
                 .put("queType", 18);
         valuet4.set("b", kvT(4, 2,
+                kv(41, 8, "a41"), kv(42, 8),
                 kv(41, 8, "b41"), kv(42, 8, "b42"),
-                kv(41, 8, "b41"), kv(42, 8, "b42")
+                kv(41, 8, "c41"), kv(42, 8)
         ));
         valuet4.set("a", kvT(4, 2,
-                kv(41, 8, "a41"), kv(42, 8, "a42")
+                kv(41, 8, "a41"), kv(42, 8, "a42"),
+                kv(41, 8, "b41"), kv(42, 8, "b42")
         ));
 
         ObjectNode valuet5 = mapper.createObjectNode()
@@ -242,21 +244,63 @@ public class QingliuTest2 {
                 kv(41, 8, "a41"), kv(42, 8)
         ));
 
-        result = invoke(getPatchAnswer, array(valuet4, valuet5), "b", "b");
+        ObjectNode valuet6 = mapper.createObjectNode()
+                .put("queId", 6)
+                .put("queType", 18);
+        valuet6.set("b", kvT(6, 2,
+                kv(41, 8, "a41"), kv(42, 8, "a42"),
+                kv(41, 8, "a41"), kv(42, 8)
+        ));
+        valuet6.set("a", kvT(6, 2,
+                kv(41, 8, "a41"), kv(42, 8, "a42"),
+                kv(41, 8, "b41"), kv(42, 8),
+                kv(41, 8, "c41"), kv(42, 8, "c42"),
+                kv(41, 8, "d41"), kv(42, 8, "d42")
+        ));
+
+        ObjectNode valuet7 = mapper.createObjectNode()
+                .put("queId", 7)
+                .put("queType", 18);
+        valuet7.set("b", kvT(7, 2,
+                null, null,
+                kv(41, 8, "a41"), kv(42, 8)
+        ));
+        valuet7.set("a", kvT(7, 2,
+                kv(41, 8, "a41"), kv(42, 8),
+                kv(41, 8, "b41"), kv(42, 8)
+        ));
+
+        result = invoke(getPatchAnswer, array(valuet4, valuet5, valuet6, valuet7), "b", "b");
         assertThat(result).containsOnlyOnce(kvT(4, 2,
+                kv(41, 8, "a41"), null,
                 kv(41, 8, "b41"), kv(42, 8, "b42"),
-                kv(41, 8, "b41"), kv(42, 8, "b42")
+                kv(41, 8, "c41"), null
+        ));
+        assertThat(result).containsOnlyOnce(kvT(7, 2,
+                null, null,
+                kv(41, 8, "a41")
         ));
         assertThat(result).noneMatch(i -> i.at("/queId").asInt() == 5);
 
-        result = invoke(getPatchAnswer, array(valuet4, valuet5), "b", "a");
+        result = invoke(getPatchAnswer, array(valuet4, valuet5, valuet6, valuet7), "b", "a");
         assertThat(result).containsOnlyOnce(kvT(4, 2,
                 kv(41, 8, "a41"), kv(42, 8, "a42"),
+                kv(41, 8, "b41"), kv(42, 8, "b42"),
                 kvNull(41, 8), kvNull(42, 8)
         ));
         assertThat(result).containsOnlyOnce(kvT(5, 2,
                 kv(41, 8, "a41"), kv(42, 8, "a42"),
                 kv(41, 8, "a41"), kv(42, 8)
+        ));
+        assertThat(result).containsOnlyOnce(kvT(6, 2,
+                kv(41, 8, "a41"), kv(42, 8, "a42"),
+                kv(41, 8, "b41"), null,
+                kv(41, 8, "c41"), kv(42, 8, "c42"),
+                kv(41, 8, "d41"), kv(42, 8, "d42")
+        ));
+        assertThat(result).containsOnlyOnce(kvT(7, 2,
+                kv(41, 8, "a41"), null,
+                kv(41, 8, "b41"), null
         ));
     }
 
@@ -292,14 +336,13 @@ public class QingliuTest2 {
         ObjectNode result = mapper.createObjectNode()
                 .put("queId", key)
                 .put("queType", 18);
-        result.withArray("tableValues");
-        ArrayNode row = null;
+        ArrayNode tableValues = result.withArray("tableValues");
+        ArrayNode row = mapper.createArrayNode();
         int count = -1;
         for (ObjectNode v : value) {
             count += 1;
             if (Objects.isNull(row) || count % col == 0) {
-                row = result.withArray("tableValues")
-                        .addArray();
+                row = tableValues.addArray();
             }
             if (Objects.isNull(v)) {
                 continue;
@@ -311,6 +354,12 @@ public class QingliuTest2 {
                 }
             }
             row.add(t);
+        }
+        // 删除空行
+        for (int i = 0; i < tableValues.size(); ++i) {
+            if (tableValues.get(i).size() == 0) {
+                tableValues.remove(i--);
+            }
         }
         return result;
     }
