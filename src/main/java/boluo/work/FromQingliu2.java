@@ -40,11 +40,13 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 import static org.apache.spark.sql.functions.*;
 
@@ -102,8 +104,8 @@ public class FromQingliu2 {
             appMap.put(jn.at("/appKey").asText(), jn.at("/appName").asText());
         }
 
-        appMap.keySet().retainAll(ImmutableList.of("84b0eecd"));
-        appMap.keySet().remove("7bb96d8f");
+        // appMap.keySet().retainAll(ImmutableList.of("a69132e0"));
+        // appMap.keySet().remove("7bb96d8f");
         for (String appId : appMap.keySet()) {
 
             // 查询本地轻流表
@@ -114,10 +116,10 @@ public class FromQingliu2 {
                 localApplyList = Lists.newArrayList();
             } else {
                 df1.registerTempTable("qingliu");
-                String sql = "select apply_id, log_id, audit_time, after\n" +
+                String sql = "select apply_id, log_id, update_time, after\n" +
                         "from\n" +
                         "(\n" +
-                        "    select apply_id, log_id, audit_time, after, row_number() over(partition by apply_id order by log_id desc) rk\n" +
+                        "    select apply_id, log_id, update_time, after, row_number() over(partition by apply_id order by log_id desc) rk\n" +
                         "    from qingliu\n" +
                         "    where app_id = '" + appId + "'" +
                         ") t\n" +
@@ -126,11 +128,13 @@ public class FromQingliu2 {
             }
 
             LocalDateTime localMaxUpdateTime = localApplyList.stream()
-                    .map(i -> i.<Timestamp>getAs("audit_time"))
+                    .map(i -> i.<Timestamp>getAs("update_time"))
                     .map(Timestamp::toLocalDateTime)
                     .max(LocalDateTime::compareTo)
                     .orElse(LocalDateTime.of(2016, 1, 1, 0, 0))
-                    .minusHours(1);
+                    .minusHours(24);
+
+            LocalDateTime insertUpdateTime = LocalDateTime.now();
 
             // 请求参数 - 分页查询
             ObjectNode requestBody = mapper.createObjectNode()
@@ -276,6 +280,7 @@ public class FromQingliu2 {
 //				}
                 deleteApply.forEach(i -> {
                     // TODO 给这些 applyId 添加删除行, logId = 'D'
+                    throw new UnsupportedOperationException("删除行未添加...");
                 });
             }
 
@@ -289,12 +294,14 @@ public class FromQingliu2 {
 
                 beforeMap.put(row.getAs(0), Tuple2.apply(row.getAs(1), onlineBefore));
             }
-            checkAnswersMap.keySet().retainAll(ImmutableList.of(706745));
+            // checkAnswersMap.keySet().retainAll(ImmutableList.of(3434917));
             List<Row> updateRowList = addQingliu(appId, appMap.get(appId), checkAnswersMap, beforeMap,
                     apiToken, webToken);
 
             // 存储
-            Dataset<Row> writeData = spark.createDataFrame(updateRowList, qingliuStruct);
+            String insertTimeStr = String.valueOf(insertUpdateTime.atZone(ZoneId.systemDefault()).toEpochSecond());
+            Dataset<Row> writeData = spark.createDataFrame(updateRowList, qingliuStruct)
+                    .withColumn("update_time", from_unixtime(expr(insertTimeStr)) );
 //            Outputs.replace(writeData, localQingliuPath,
 //                    expr(String.format("t.app_id='%s' and s.apply_id=t.apply_id and s.log_id=t.log_id", appId)),
 //                    "app_id");
@@ -348,7 +355,7 @@ public class FromQingliu2 {
                 );
                 ObjectNode auditRecordResult = formatAuditRecordDetail(webAuditRecordResult);
 
-                if (logId == 1593432) {
+                if (logId == 10779210) {
                     System.out.println("aaa");
                 }
 
@@ -392,8 +399,13 @@ public class FromQingliu2 {
             // 二次检查
             ArrayNode lastAfter = onlineBefore;
             ArrayNode onlineAfter = checkAnswersMap.get(applyId);
+            // onlineAfter 去掉queId in (0,1,2,3,4)
+            ArrayNode onlineAfterFiltered = mapper.createArrayNode();
+            StreamSupport.stream(onlineAfter.spliterator(), false)
+                    .filter(i -> i.at("/queId").asInt() > 4)
+                    .forEach(onlineAfterFiltered::add);
 
-            assertCompare(onlineAfter, lastAfter);
+            assertCompare(onlineAfterFiltered, lastAfter);
             updateRowList.addAll(tempUpdateRowList);
         }
 
@@ -506,12 +518,23 @@ public class FromQingliu2 {
         if (Objects.isNull(answer1) && Objects.isNull(answer2)) {
             return;
         }
-        if (answer1.size() == 0 && answer2.size() == 0) {
+
+        ArrayNode answerFilter1 = mapper.createArrayNode();
+        ArrayNode answerFilter2 = mapper.createArrayNode();
+        Streams.stream(answer1)
+                .filter(i -> !i.at("/values").isArray() || i.at("/values").size() != 0)
+                .forEach(answerFilter1::add);
+
+        Streams.stream(answer2)
+                .filter(i -> !i.at("/values").isArray() || i.at("/values").size() != 0)
+                .forEach(answerFilter2::add);
+
+        if (answerFilter1.size() == 0 && answerFilter2.size() == 0) {
             return;
         }
 
-        if (answer1.size() == 0 && answer2.size() > 0) {
-            Optional<JsonNode> br_value = Streams.stream(answer2).filter(i -> {
+        if (answerFilter1.size() == 0 && answerFilter2.size() > 0) {
+            Optional<JsonNode> br_value = Streams.stream(answerFilter2).filter(i -> {
                 return !i.at("/values").isNull();
             }).findAny();
             if (!br_value.isPresent()) {
@@ -522,69 +545,43 @@ public class FromQingliu2 {
         boolean br = true;
 
         Set<String> idSet = Sets.newTreeSet();
-        for (JsonNode jn1 : answer1) {
+        for (JsonNode jn1 : answerFilter1) {
             idSet.add(jn1.at("/queId").asText());
         }
 
-        if (answer2.size() == 0) {
+        if (answerFilter2.size() == 0) {
             br = false;
         }
-        for (JsonNode jn2 : answer2) {
+
+        for (JsonNode jn2 : answerFilter2) {
             if (idSet.contains(jn2.at("/queId").asText())) {
-                for (JsonNode jn1 : answer1) {
-                    String value1 = jn1.at("/values/0/value").asText();
+                for (JsonNode jn1 : answerFilter1) {
                     if (jn2.at("/queId").asText().equals(jn1.at("/queId").asText())) {
-                        // 找出answer1和answer2 queId相同的数据, 比较其values中的value
-                        br = br && jn2.at("/values/0/value").asText().equals(value1);
 
-                        // TODO 如果一个有表格, 一个没有表格
-                        boolean br_table_values = (jn1.at("/tableValues").isMissingNode() && !jn2.at("/tableValues").isMissingNode())
-                                || (!jn1.at("/tableValues").isMissingNode() && jn2.at("/tableValues").isMissingNode());
+                        if(!jn1.at("/values").isMissingNode() && !jn2.at("/values").isMissingNode()){
+                            br = br && compareValues((ArrayNode) jn1.at("/values"), (ArrayNode) jn2.at("/values"));
+                        }
 
-                        // br = br && !br_table_values;
-
-                        if (jn2.at("/tableValues").isMissingNode() && jn1.at("/tableValues").isMissingNode()) {
-                            continue;
-                        } else {
+                        if (!jn2.at("/tableValues").isMissingNode() || !jn1.at("/tableValues").isMissingNode()) {
 
                             Preconditions.checkArgument(jn1.at("/tableValues").size() == jn2.at("/tableValues").size(),
                                     "表格部分列数不同...jn1: " + jn1.at("/tableValues") +
                                             ", jn2: " + jn2.at("/tableValues"));
                             if (jn2.at("/tableValues").size() > 0) {
                                 compareTable((ArrayNode) jn1.at("/tableValues"), (ArrayNode) jn2.at("/tableValues"));
-                                // compareTable((ArrayNode) jn1.at("/values"), (ArrayNode) jn2.at("/values"));
-                                continue;
-                            }
-
-                            // 如果两个都有, 比较表格部分
-                            Map<Integer, String> mapTable1 = Maps.newHashMap();
-                            for (JsonNode jnt1 : jn1.at("/tableValues")) {
-                                mapTable1.put(jnt1.at("/queId").asInt(), jnt1.at("/values/0/value").asText());
-                            }
-
-                            Preconditions.checkArgument(mapTable1.size() == jn2.at("/tableValues").size(),
-                                    "表格部分列数不同...mapTable1.size: " + mapTable1.size() +
-                                            ", jn2.size: " + jn2.at("/tableValues").size() +
-                                            ", mapTable1: " + mapTable1 +
-                                            ", jn2: " + jn2.at("/tableValues"));
-
-                            for (JsonNode jnt2 : jn2.at("/tableValues")) {
-                                int queId = jnt2.at("/queId").asInt();
-                                br = br && Objects.equals(jnt2.at("/values/0/value").asText(), mapTable1.get(queId));
                             }
                         }
-
                     }
                 }
-            } else if (!jn2.at("/values").isNull()) {
+            } else if (jn2.at("/values").isArray() && jn2.at("/values").size() != 0) {
                 // 如果answer2中的数据1中没有, 且values不为null, 则两者不同
                 br = false;
             }
         }
 
         if (!br) {
-            logger.error("answer1: " + mapper.writerWithDefaultPrettyPrinter().writeValueAsString(answer1));
-            logger.error("answer2: " + mapper.writerWithDefaultPrettyPrinter().writeValueAsString(answer2));
+            logger.error("answer1: " + mapper.writerWithDefaultPrettyPrinter().writeValueAsString(answerFilter1));
+            logger.error("answer2: " + mapper.writerWithDefaultPrettyPrinter().writeValueAsString(answerFilter2));
             throw new RuntimeException("校验结果不正确...");
         }
 
@@ -600,6 +597,25 @@ public class FromQingliu2 {
             }
         }
 
+    }
+
+    private static boolean compareValues(ArrayNode answer1, ArrayNode answer2) {
+
+        boolean br = true;
+
+        if (answer1.size() != answer2.size()) {
+            br = false;
+        }
+
+        for (int i = 0; i < answer1.size(); i++) {
+            for (int j = 0; j < answer2.size(); j++) {
+                if (i == j) {
+                    br = br && Objects.equals(answer1.get(i).at("/value").asText(), answer2.get(i).at("/value").asText());
+                }
+            }
+        }
+
+        return br;
     }
 
     private static ArrayNode replace(ArrayNode answer1, ArrayNode answer2) {
@@ -647,9 +663,9 @@ public class FromQingliu2 {
 
                             // 取jn2所有行数
                             Set<Integer> row2Set = Sets.newHashSet();
-                            for (JsonNode j : answer2) {
-                                for (JsonNode jn : j.at("/tableValues")) {
-                                    for (JsonNode rowJn : jn) {
+                            for (JsonNode j : jn2.get().at("/tableValues")) {
+                                for (JsonNode rowJn : j) {
+                                    if (rowJn.at("/values").isArray() && rowJn.at("/values").size() != 0) {
                                         row2Set.add(rowJn.at("/values/0/ordinal").asInt());
                                     }
                                 }
@@ -659,7 +675,9 @@ public class FromQingliu2 {
                                 // jn1当前行数
                                 List<Integer> row1 = Lists.newArrayList();
                                 for (JsonNode temp2 : temp1) {
-                                    row1.add(temp2.at("/values/0/ordinal").asInt());
+                                    if (temp2.at("/values").isArray() && temp2.at("/values").size() != 0) {
+                                        row1.add(temp2.at("/values/0/ordinal").asInt());
+                                    }
                                 }
                                 int rowNum1 = row1.get(0);
 
@@ -667,7 +685,9 @@ public class FromQingliu2 {
                                     // jn2当前行数
                                     List<Integer> row2 = Lists.newArrayList();
                                     for (JsonNode temp4 : temp3) {
-                                        row2.add(temp4.at("/values/0/ordinal").asInt());
+                                        if (temp4.at("/values").isArray() && temp4.at("/values").size() != 0) {
+                                            row2.add(temp4.at("/values/0/ordinal").asInt());
+                                        }
                                     }
                                     int rowNum2 = row2.isEmpty() ? -1 : row2.get(0);
 
@@ -716,7 +736,7 @@ public class FromQingliu2 {
                 return i.at("/queId").asInt() == jn2.at("/queId").asInt() && i.at("/queType").asInt() == jn2.at("/queType").asInt();
             }).map(i -> (ObjectNode) i).findAny();
 
-            if (!jn1.isPresent()) {
+            if (!jn1.isPresent() && !jn2.at("/values/0/value").isNull()) {
                 resultAnswer.add(jn2);
             } else {
 
@@ -827,8 +847,8 @@ public class FromQingliu2 {
                 ArrayNode tempB = mapper.createArrayNode();
                 for (JsonNode tempI : tempO) {
                     // if (tempI.at("/queId").asInt() == tempO.at("/queId").asInt()) {
-//                            if (tempI.at("/values").isArray() && tempI.at("/values").size() != 0) {
-                    tempB.add(tempI);
+                    if (tempI.at("/values").isArray() && tempI.at("/values").size() != 0) {
+                        tempB.add(tempI);
 //							} else {
 //								ObjectNode o = mapper.createObjectNode()
 //										.put("queId", tempI.at("/queId").asInt())
@@ -836,7 +856,7 @@ public class FromQingliu2 {
 //								ArrayNode a = o.withArray("values");
 //								a.add(mapper.createObjectNode().putNull("value"));
 //								tempB.add(o);
-//							}
+                    }
                 }
                 tempA.add(tempB);
             }
@@ -909,7 +929,11 @@ public class FromQingliu2 {
                                 tempB.add(tempD);
                             }
                         } else {
+                            // before after 都不是null
                             if (tempD.at("/values").isArray() && tempD.at("/values").size() != 0 && !tempD.at("/values/0/value").isNull()) {
+                                tempB.add(tempD);
+                            } else if (tempC.at("/values").isArray() && tempC.at("/values").size() != 0 && tempD.at("/values").size() == 0) {
+                                // before values not [], after values is []
                                 tempB.add(tempD);
                             }
                         }
@@ -971,6 +995,7 @@ public class FromQingliu2 {
 
         return arrayNode;
     }
+
     @SuppressWarnings("unchecked")
     private static <T> T getValue(ArrayNode answer, String key) {
 
@@ -978,22 +1003,22 @@ public class FromQingliu2 {
             if (jn.at("/queTitle").asText().equals(key) && !jn.at("/queId").asText().equals("0")) {
                 String queType = jn.at("/queType").asText();
                 switch (queType) {
-                    case "":
-                        JsonNodeType type = jn.at("/values/0/value").getNodeType();
-                        if (type == JsonNodeType.STRING) return (T) jn.at("/values/0/value").asText();
-                        if (type == JsonNodeType.NUMBER) return (T) (Object) jn.at("/values/0/value").asLong();
-                        throw new UnsupportedOperationException("未知的类型...");
-                    case "2":
-                        return (T) jn.at("/values/0/value").asText();
-                    case "4":
-                        String lastTimeStr = jn.at("/values/0/value").asText();
-                        Preconditions.checkArgument(!Strings.isNullOrEmpty(lastTimeStr), "lastTimeStr为空");
-                        DateTimeFormatter format = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-                        return (T) LocalDateTime.parse(lastTimeStr, format);
-                    case "8":
-                        return (T) (Object) jn.at("/values/0/value").asLong();
-                    default:
-                        throw new UnsupportedOperationException("未知的类型: queType = " + queType);
+                case "":
+                    JsonNodeType type = jn.at("/values/0/value").getNodeType();
+                    if (type == JsonNodeType.STRING) return (T) jn.at("/values/0/value").asText();
+                    if (type == JsonNodeType.NUMBER) return (T) (Object) jn.at("/values/0/value").asLong();
+                    throw new UnsupportedOperationException("未知的类型...");
+                case "2":
+                    return (T) jn.at("/values/0/value").asText();
+                case "4":
+                    String lastTimeStr = jn.at("/values/0/value").asText();
+                    Preconditions.checkArgument(!Strings.isNullOrEmpty(lastTimeStr), "lastTimeStr为空");
+                    DateTimeFormatter format = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+                    return (T) LocalDateTime.parse(lastTimeStr, format);
+                case "8":
+                    return (T) (Object) jn.at("/values/0/value").asLong();
+                default:
+                    throw new UnsupportedOperationException("未知的类型: queType = " + queType);
                 }
             }
         }

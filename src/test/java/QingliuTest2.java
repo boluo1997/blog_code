@@ -20,10 +20,11 @@ public class QingliuTest2 {
 
     // 替换测试
     @Test
-    public void replaceTest1() throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
+    public void replaceTest1() throws Throwable {
         Method replace = FromQingliu2.class.getDeclaredMethod("replace", ArrayNode.class, ArrayNode.class);
         replace.setAccessible(true);
         String randomKey = "key" + Math.round(Math.random() * 100);
+        ArrayNode result;
 
         ObjectNode value1 = kv(0, 8, "20");
         ObjectNode patch1 = kv(0, 8, "30")
@@ -63,25 +64,51 @@ public class QingliuTest2 {
         ///////////////////////
         // 增加行
 
-        ObjectNode value4 = kvT(0, 2,
+        ObjectNode value4 = kvT(4, 2,
                 kv(1, 8, "v1"), kv(2, 8, "v2"),
                 kv(1, 8, "x1"), kv(2, 8, "x2"));
-        ObjectNode patch4 = kvT(0, 2,
+        ObjectNode patch4 = kvT(4, 2,
                 kv(1, 8, "v1m"), null,
                 kv(1, 8, "x1m"), null,
                 kv(1, 8, "y1"), kv(2, 8, "y2"),
                 kv(1, 8, "z1"), kv(2, 8, "z2"));
-        ObjectNode result4 = kvT(0, 2,
+        ObjectNode result4 = kvT(4, 2,
                 kv(1, 8, "v1m"), kv(2, 8, "v2"),
                 kv(1, 8, "x1m"), kv(2, 8, "x2"),
                 kv(1, 8, "y1"), kv(2, 8, "y2"),
                 kv(1, 8, "z1"), kv(2, 8, "z2"));
-        Assert.assertEquals(array(result4), replace.invoke(null, array(value4), array(patch4)));
+
+        // 修改1行
+        ObjectNode value5 = kvT(5, 2,
+                kv(1, 8, "a1"), kv(2, 8, "a2"),
+                kv(1, 8, "b1"), kv(2, 8, "b2"));
+        ObjectNode patch5 = kvT(5, 2,
+                null, kv(2, 8, "a2m"));
+        ObjectNode result5 = kvT(5, 2,
+                kv(1, 8, "a1"), kv(2, 8, "a2m"),
+                kv(1, 8, "b1"), kv(2, 8, "b2"));
+
+        result = invoke(replace, array(value4, value5), array(patch4, patch5));
+        Assert.assertEquals(array(result4, result5), result);
+
+        ///////////////////////
+
+        ObjectNode value6 = kvT(6, 2,
+                kv(1, 8, "a1"), kv(2, 8, "a2"),
+                kv(1, 8, "b1"), kv(2, 8, "b2"));
+        ObjectNode patch6 = kvT(6, 2,
+                kvNull(3, 8));
+        ObjectNode result6 = kvT(6, 2,
+                kv(1, 8, "a1"), kv(2, 8, "a2"),
+                kv(1, 8, "b1"), kv(2, 8, "b2"));
+
+        result = invoke(replace, array(value6), array(patch6));
+        Assert.assertEquals(array(result6), result);
     }
 
     // 删除测试
     @Test
-    public void compareTest2() throws Throwable {
+    public void replaceTest2() throws Throwable {
         Method replace = FromQingliu2.class.getDeclaredMethod("replace", ArrayNode.class, ArrayNode.class);
         replace.setAccessible(true);
 
@@ -98,13 +125,7 @@ public class QingliuTest2 {
         Method assertCompare = FromQingliu2.class.getDeclaredMethod("assertCompare", ArrayNode.class, ArrayNode.class);
         assertCompare.setAccessible(true);
 
-        ObjectNode value1 = mapper.createObjectNode()
-                .put("queId", 0)
-                .put("queTitle", "编号")
-                .put("queType", "8");
-        value1.withArray("values")
-                .addObject()
-                .put("value", "20");
+        ObjectNode value1 = kv(0, 8, "20");
 
         ObjectNode value2 = mapper.createObjectNode()
                 .put("queId", "0");
@@ -113,8 +134,9 @@ public class QingliuTest2 {
                 .put("tableValue", "20")
                 .put("value", "20");
 
-
-        assertCompare.invoke(null, array(value1), array(value2));
+        assertThatNoException().isThrownBy(() -> {
+            assertCompare.invoke(null, array(value1), array(value2));
+        });
         assertThatExceptionOfType(RuntimeException.class).isThrownBy(() -> {
             invoke(assertCompare, array(value1), array());
         });
@@ -130,6 +152,26 @@ public class QingliuTest2 {
         assertThatExceptionOfType(RuntimeException.class).isThrownBy(() -> {
             invoke(assertCompare, array(value1), array(value3));
         });
+
+        ObjectNode valueL4 = kv(4, 8, "20", "30");
+        ObjectNode valueR4 = kv(4, 8, "20");
+        assertThatNoException().isThrownBy(() -> {
+            assertCompare.invoke(null, array(valueL4), array(valueL4));
+        });
+        assertThatExceptionOfType(RuntimeException.class).isThrownBy(() -> {
+            invoke(assertCompare, array(valueL4), array(valueR4));
+        });
+        assertThatExceptionOfType(RuntimeException.class).isThrownBy(() -> {
+            invoke(assertCompare, array(valueR4), array(valueL4));
+        });
+    }
+
+    @Test
+    public void compareTest2() throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
+        Method assertCompare = FromQingliu2.class.getDeclaredMethod("assertCompare", ArrayNode.class, ArrayNode.class);
+        assertCompare.setAccessible(true);
+
+        ObjectNode value1 = kv(0, 8, "20");
 
         ///////////////////////
         // 比较table
@@ -149,12 +191,18 @@ public class QingliuTest2 {
         assertThatNoException().isThrownBy(() -> {
             invoke(assertCompare, array(value4), array(value5));
         });
+        assertThatNoException().isThrownBy(() -> {
+            invoke(assertCompare, array(value5), array(value4));
+        });
         ObjectNode value6 = value1.deepCopy();
         value6.withArray("tableValues")
                 .add(kv(186920, 4, "186920"))
                 .add(kv(186918, 4, "186918"));
         assertThatExceptionOfType(RuntimeException.class).isThrownBy(() -> {
             invoke(assertCompare, array(value4), array(value6));
+        });
+        assertThatExceptionOfType(RuntimeException.class).isThrownBy(() -> {
+            invoke(assertCompare, array(value6), array(value4));
         });
 
         ObjectNode valueL7 = value4.deepCopy();
@@ -164,6 +212,9 @@ public class QingliuTest2 {
                 kv(186918, 4, "186918"));
         assertThatExceptionOfType(RuntimeException.class).isThrownBy(() -> {
             invoke(assertCompare, array(valueL7), array(valueR7));
+        });
+        assertThatExceptionOfType(RuntimeException.class).isThrownBy(() -> {
+            invoke(assertCompare, array(valueR7), array(valueL7));
         });
 
         ///////////////////////
@@ -176,6 +227,35 @@ public class QingliuTest2 {
                 kv(1, 8, "x1"), kv(2, 8, "x2"));
         assertThatNoException().isThrownBy(() -> {
             invoke(assertCompare, array(valueL8), array(valueR8));
+        });
+        assertThatNoException().isThrownBy(() -> {
+            invoke(assertCompare, array(valueR8), array(valueL8));
+        });
+
+        ///////////////////////
+
+        ObjectNode valueL9 = kvT(0, 2,
+                kv(1, 8, "v1"), kv(2, 8));
+        ObjectNode valueR9 = kvT(0, 2,
+                kv(1, 8, "v1"));
+        assertThatNoException().isThrownBy(() -> {
+            invoke(assertCompare, array(valueL9), array(valueR9));
+        });
+        assertThatNoException().isThrownBy(() -> {
+            invoke(assertCompare, array(valueR9), array(valueL9));
+        });
+
+        ///////////////////////
+
+        ObjectNode valueL10 = kvT(0, 2,
+                kv(1, 8, "v1a", "v1b"), kv(2, 8));
+        ObjectNode valueR10 = kvT(0, 2,
+                kv(1, 8, "v1a"));
+        assertThatExceptionOfType(RuntimeException.class).isThrownBy(() -> {
+            invoke(assertCompare, array(valueL10), array(valueR10));
+        });
+        assertThatExceptionOfType(RuntimeException.class).isThrownBy(() -> {
+            invoke(assertCompare, array(valueR10), array(valueL10));
         });
     }
 
@@ -270,7 +350,18 @@ public class QingliuTest2 {
                 kv(41, 8, "b41"), kv(42, 8)
         ));
 
-        result = invoke(getPatchAnswer, array(valuet4, valuet5, valuet6, valuet7), "b", "b");
+        ObjectNode valuet8 = mapper.createObjectNode()
+                .put("queId", 8)
+                .put("queType", 18);
+        valuet8.set("b", kvT(8, 2,
+                kv(41, 8, "a41"), kv(42, 8, "a42")
+        ));
+        valuet8.set("a", kvT(8, 2,
+                kv(41, 8, "a41m"), kv(42, 8)
+        ));
+
+
+        result = invoke(getPatchAnswer, array(valuet4, valuet5, valuet6, valuet7, valuet8), "b", "b");
         assertThat(result).containsOnlyOnce(kvT(4, 2,
                 kv(41, 8, "a41"), null,
                 kv(41, 8, "b41"), kv(42, 8, "b42"),
@@ -282,7 +373,7 @@ public class QingliuTest2 {
         ));
         assertThat(result).noneMatch(i -> i.at("/queId").asInt() == 5);
 
-        result = invoke(getPatchAnswer, array(valuet4, valuet5, valuet6, valuet7), "b", "a");
+        result = invoke(getPatchAnswer, array(valuet4, valuet5, valuet6, valuet7, valuet8), "b", "a");
         assertThat(result).containsOnlyOnce(kvT(4, 2,
                 kv(41, 8, "a41"), kv(42, 8, "a42"),
                 kv(41, 8, "b41"), kv(42, 8, "b42"),
@@ -290,7 +381,7 @@ public class QingliuTest2 {
         ));
         assertThat(result).containsOnlyOnce(kvT(5, 2,
                 kv(41, 8, "a41"), kv(42, 8, "a42"),
-                kv(41, 8, "a41"), kv(42, 8)
+                kv(41, 8, "a41"), null
         ));
         assertThat(result).containsOnlyOnce(kvT(6, 2,
                 kv(41, 8, "a41"), kv(42, 8, "a42"),
@@ -298,9 +389,20 @@ public class QingliuTest2 {
                 kv(41, 8, "c41"), kv(42, 8, "c42"),
                 kv(41, 8, "d41"), kv(42, 8, "d42")
         ));
-        assertThat(result).containsOnlyOnce(kvT(7, 2,
+        // TODO 暂时与顺序无关
+        ObjectNode expect7 = kvT(7, 2,
                 kv(41, 8, "a41"), null,
                 kv(41, 8, "b41"), null
+        );
+        assertThat(result).filteredOn(i -> i.at("/queId").asInt() == 7)
+                .hasSize(1)
+                .singleElement()
+                .matches(i -> {
+                    assertThat(i.at("/tableValues")).containsExactlyInAnyOrderElementsOf(expect7.at("/tableValues"));
+                    return true;
+                });
+        assertThat(result).containsOnlyOnce(kvT(8, 2,
+                kv(41, 8, "a41m"), kv(42, 8)
         ));
     }
 
