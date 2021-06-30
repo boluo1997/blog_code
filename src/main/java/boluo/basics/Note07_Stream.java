@@ -3,6 +3,7 @@ package boluo.basics;
 import com.clearspring.analytics.util.Lists;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
 import org.junit.Test;
@@ -266,6 +267,16 @@ public class Note07_Stream {
 				.forEach(answer2::add);
 
 		System.out.println(answer2);
+
+	}
+
+	@Test
+	public void func12() {
+		ObjectNode node = mapper.createObjectNode();
+		node.put("queId", 4)
+				.put("queTitle", "title")
+				.put("queType", 18);
+
 
 	}
 
