@@ -22,6 +22,7 @@ import org.apache.http.client.methods.RequestBuilder;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
+import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.RowFactory;
@@ -57,7 +58,16 @@ public class FromQingliu2 {
     private static final ObjectMapper mapper = new ObjectMapper();
     private static final Logger logger = LoggerFactory.getLogger(FromQingliu2.class);
     private static final Cache<String, JsonNode> requestCache = CacheBuilder.newBuilder().build();
-    private static final CloseableHttpClient http = HttpClients.createDefault();
+    private static final CloseableHttpClient http;
+
+    static {
+        PoolingHttpClientConnectionManager cm = new PoolingHttpClientConnectionManager();
+        cm.setMaxTotal(2);
+        cm.setDefaultMaxPerRoute(2);
+        http = HttpClients.custom()
+                .setConnectionManager(cm)
+                .build();
+    }
 
     public static void main(String[] args) throws Exception {
         SparkSession spark = SparkSession.builder()
@@ -77,7 +87,7 @@ public class FromQingliu2 {
                 .add("app_id", "string")
                 .add("app_name", "string")
                 .add("apply_id", "int")
-                .add("log_id", "int")
+                .add("log_id", "string")
                 .add("create_time", "timestamp")
                 .add("audit_name", "string")
                 .add("audit_result", "int")
@@ -104,8 +114,7 @@ public class FromQingliu2 {
             appMap.put(jn.at("/appKey").asText(), jn.at("/appName").asText());
         }
 
-        // appMap.keySet().retainAll(ImmutableList.of("a69132e0"));
-        // appMap.keySet().remove("7bb96d8f");
+        appMap.keySet().retainAll(ImmutableList.of("66ca5c3f", "ef5320a1", "862063f4"));
         for (String appId : appMap.keySet()) {
 
             // 查询本地轻流表
@@ -139,11 +148,16 @@ public class FromQingliu2 {
             // 请求参数 - 分页查询
             ObjectNode requestBody = mapper.createObjectNode()
                     .put("pageNum", "1")
-                    .put("pageSize", "1000");
+                    .put("pageSize", "1000")
+                    .put("type", 8);
 
             requestBody.withArray("sorts")
                     .addObject()
                     .put("queId", 3)
+                    .put("isAscend", false);
+            requestBody.withArray("sorts")
+                    .addObject()
+                    .put("queId", 0)
                     .put("isAscend", false);
 
             // 分页获取应用的数据, 通过appId获取appId下所有的applyId
@@ -170,11 +184,16 @@ public class FromQingliu2 {
 
                 ObjectNode tempRequestBody = mapper.createObjectNode();
                 tempRequestBody.put("pageNum", i)
-                        .put("pageSize", "1000");
+                        .put("pageSize", "1000")
+                        .put("type", 8);
 
                 tempRequestBody.withArray("sorts")
                         .addObject()
                         .put("queId", 3)
+                        .put("isAscend", false);
+                tempRequestBody.withArray("sorts")
+                        .addObject()
+                        .put("queId", 0)
                         .put("isAscend", false);
 
                 // 分页获取应用的数据, 通过appId获取appId下所有的applyId
@@ -186,7 +205,7 @@ public class FromQingliu2 {
                     checkAnswersMap.put(jn.at("/applyId").asInt(), (ArrayNode) jn.at("/answers"));
                 }
 
-                // TODO 取checkAnswersMap中最后一条数据时间, 与localMaxUpdateTime比较
+                // 取checkAnswersMap中最后一条数据时间, 与localMaxUpdateTime比较
                 ArrayNode lastAnswersNode1 = Iterables.getFirst(checkAnswersMap.values(), null);
                 LocalDateTime lastTime1 = Objects.nonNull(lastAnswersNode1)
                         ? getValue(lastAnswersNode1, "更新时间")
@@ -203,12 +222,6 @@ public class FromQingliu2 {
             Set<Integer> currAddApplyIdSet = Sets.difference(
                     checkAnswersMap.keySet(),
                     localApplyList.stream().map(i -> i.getAs(0)).collect(Collectors.toSet()));
-
-            // TODO error
-
-            if (localApplyList.size() + currAddApplyIdSet.size() < applyIdCount) {
-                System.out.println("aaa");
-            }
 
             Preconditions.checkArgument(localApplyList.size() + currAddApplyIdSet.size() >= applyIdCount,
                     "数据异常...appId为: " + appId +
@@ -234,11 +247,16 @@ public class FromQingliu2 {
                 // 有删除的, 处理
                 ObjectNode deleteRequestBody = mapper.createObjectNode()
                         .put("pageNum", 1)
-                        .put("pageSize", "1000");
+                        .put("pageSize", "1000")
+                        .put("type", 8);
 
                 deleteRequestBody.withArray("sorts")
                         .addObject()
                         .put("queId", 3)
+                        .put("isAscend", false);
+                deleteRequestBody.withArray("sorts")
+                        .addObject()
+                        .put("queId", 0)
                         .put("isAscend", false);
 
                 deleteRequestBody.withArray("queries")
@@ -294,14 +312,15 @@ public class FromQingliu2 {
 
                 beforeMap.put(row.getAs(0), Tuple2.apply(row.getAs(1), onlineBefore));
             }
-            // checkAnswersMap.keySet().retainAll(ImmutableList.of(3434917));
+            // checkAnswersMap.keySet().retainAll(ImmutableList.of(896164));
             List<Row> updateRowList = addQingliu(appId, appMap.get(appId), checkAnswersMap, beforeMap,
                     apiToken, webToken);
 
             // 存储
             String insertTimeStr = String.valueOf(insertUpdateTime.atZone(ZoneId.systemDefault()).toEpochSecond());
             Dataset<Row> writeData = spark.createDataFrame(updateRowList, qingliuStruct)
-                    .withColumn("update_time", from_unixtime(expr(insertTimeStr)) );
+                    .withColumn("update_time", to_timestamp(from_unixtime(expr(insertTimeStr))));
+
 //            Outputs.replace(writeData, localQingliuPath,
 //                    expr(String.format("t.app_id='%s' and s.apply_id=t.apply_id and s.log_id=t.log_id", appId)),
 //                    "app_id");
@@ -330,8 +349,16 @@ public class FromQingliu2 {
             // 存放添加的logId对应的节点, 也就是online接口返回的整个结果
             List<JsonNode> updateLogIdList = Lists.newArrayList();
 
+            // 编号节点
+            List<JsonNode> noNodeList = Streams.stream(checkAnswersMap.get(applyId))
+                    .filter(i -> {
+                        return i.at("/queId").asInt() == 0;
+                    })
+                    .collect(Collectors.toList());
+            Preconditions.checkArgument(noNodeList.size() > 0, "该数据无编号节点, appId为: " + appId + ", applyId为: " + applyId);
+            JsonNode noNode = noNodeList.get(0);
             int localMaxLogId = beforeMap.containsKey(applyId) ? beforeMap.get(applyId)._1 : -1;
-            ArrayNode onlineBefore = beforeMap.containsKey(applyId) ? beforeMap.get(applyId)._2 : mapper.createArrayNode();
+            ArrayNode onlineBefore = beforeMap.containsKey(applyId) ? beforeMap.get(applyId)._2 : mapper.createArrayNode().add(noNode);
 
             // 获取qingliuLogIdNode中所有的qingliuLogId
             for (JsonNode jn : qingliuLogIdNode.at("/result/auditRecords")) {
@@ -355,7 +382,7 @@ public class FromQingliu2 {
                 );
                 ObjectNode auditRecordResult = formatAuditRecordDetail(webAuditRecordResult);
 
-                if (logId == 10779210) {
+                if (logId == 2140645) {
                     System.out.println("aaa");
                 }
 
@@ -389,7 +416,7 @@ public class FromQingliu2 {
                 String onlineAfter_ = Objects.isNull(onlineAfter) ? null : onlineAfter.toString();
 
                 Row auditRow = uid == 0L ? null : RowFactory.create(uid, nickName, email, head);
-                Row lineRow = RowFactory.create(appId, appName, applyId, logId, createTime, auditName,
+                Row lineRow = RowFactory.create(appId, appName, applyId, String.valueOf(logId), createTime, auditName,
                         auditResult, auditTime, auditRow, onlineAfter_);
 
                 tempUpdateRowList.add(lineRow);
@@ -399,10 +426,10 @@ public class FromQingliu2 {
             // 二次检查
             ArrayNode lastAfter = onlineBefore;
             ArrayNode onlineAfter = checkAnswersMap.get(applyId);
-            // onlineAfter 去掉queId in (0,1,2,3,4)
+            // onlineAfter 去掉queId in (1,2,3,4)
             ArrayNode onlineAfterFiltered = mapper.createArrayNode();
             StreamSupport.stream(onlineAfter.spliterator(), false)
-                    .filter(i -> i.at("/queId").asInt() > 4)
+                    .filter(i -> i.at("/queId").asInt() > 4 || i.at("/queId").asInt() < 1)
                     .forEach(onlineAfterFiltered::add);
 
             assertCompare(onlineAfterFiltered, lastAfter);
@@ -476,7 +503,7 @@ public class FromQingliu2 {
         try (CloseableHttpClient http = HttpClients.createDefault();
              CloseableHttpResponse response = http.execute(requestBuilder.build());
              InputStream is = response.getEntity().getContent()) {
-            Thread.sleep(128);
+            Thread.sleep(0);
             JsonNode r = mapper.readTree(is);
             if (r.at("/statusCode").intValue() == 40001) {
                 throw new AuthenticationException();
@@ -513,6 +540,7 @@ public class FromQingliu2 {
     }
 
 
+    // title必须是字符串且有值
     private static void assertCompare(ArrayNode answer1, ArrayNode answer2) throws JsonProcessingException {
 
         if (Objects.isNull(answer1) && Objects.isNull(answer2)) {
@@ -558,7 +586,17 @@ public class FromQingliu2 {
                 for (JsonNode jn1 : answerFilter1) {
                     if (jn2.at("/queId").asText().equals(jn1.at("/queId").asText())) {
 
-                        if(!jn1.at("/values").isMissingNode() && !jn2.at("/values").isMissingNode()){
+                        if(!(jn1.at("/queTitle").getNodeType() == JsonNodeType.STRING && jn2.at("/queTitle").getNodeType() == JsonNodeType.STRING)){
+                            throw new RuntimeException("queTitle类型不是string...");
+                        }
+                        if(Strings.isNullOrEmpty(jn1.at("/queTitle").asText()) || Strings.isNullOrEmpty(jn2.at("/queTitle").asText())){
+                            throw new RuntimeException("queTitle为空...");
+                        }
+
+                        // 比较title值
+                        br = br && jn1.at("/queTitle").asText().equals(jn2.at("/queTitle").asText());
+
+                        if (!jn1.at("/values").isMissingNode() && !jn2.at("/values").isMissingNode()) {
                             br = br && compareValues((ArrayNode) jn1.at("/values"), (ArrayNode) jn2.at("/values"));
                         }
 
@@ -710,8 +748,9 @@ public class FromQingliu2 {
                     if (!jn2.get().at("/values/0/value").isNull()) {
                         if (tempA.size() > 0) {
                             ObjectNode obj = mapper.createObjectNode();
-                            obj.put("queId", jn2.get().at("/queId").asInt())
-                                    .put("queType", jn2.get().at("/queType").asInt());
+//							obj.put("queId", jn2.get().at("/queId").asInt())
+//									.put("queType", jn2.get().at("/queType").asInt());
+                            addKey(obj, jn2.get());
                             obj.set("tableValues", tempA);
                             resultAnswer.add(obj);
                         } else {
@@ -795,7 +834,6 @@ public class FromQingliu2 {
 
                 objectNode.put("queId", jn2.at("/queId").asInt())
                         .put("queType", jn2.at("/queType").asInt());
-                // .putNull("values");
 
                 ArrayNode tmpA = objectNode.withArray("values");
                 tmpA.add(mapper.createObjectNode().putNull("value"));
@@ -804,14 +842,18 @@ public class FromQingliu2 {
                 if (before.isNull() && after.isNull()) {
 
                 } else if (!before.isNull() && after.isNull()) {    // 如果before有值 after为null, 存入一个null值, 代表删除
+                    // 将before中的key值全部填入object
+                    addKey(objectNode, before);
                     if (before.at("/values").isArray() && before.at("/values").size() != 0) {
                         arrayNode.add(objectNode);
                     }
                 } else if (before.isNull() && !after.isNull()) {    // before为null after有值
+                    addKey(objectNode, after);
                     if (after.at("/values").isArray() && after.at("/values").size() != 0) {
                         arrayNode.add(after);
                     }
                 } else { // 如果before after都有值 添加after
+                    addKey(objectNode, before);
                     if (after.at("/values").isArray() && after.at("/values").size() != 0) {
                         arrayNode.add(after);
                     }
@@ -842,20 +884,14 @@ public class FromQingliu2 {
 
         if (before.isNull() && !after.isNull()) {
 
+            addKey(objectNode, after);
+
             // 遍历after 把after中的值传出
             for (JsonNode tempO : after.at("/tableValues")) {
                 ArrayNode tempB = mapper.createArrayNode();
                 for (JsonNode tempI : tempO) {
-                    // if (tempI.at("/queId").asInt() == tempO.at("/queId").asInt()) {
                     if (tempI.at("/values").isArray() && tempI.at("/values").size() != 0) {
                         tempB.add(tempI);
-//							} else {
-//								ObjectNode o = mapper.createObjectNode()
-//										.put("queId", tempI.at("/queId").asInt())
-//										.put("queType", tempI.at("/queType").asInt());
-//								ArrayNode a = o.withArray("values");
-//								a.add(mapper.createObjectNode().putNull("value"));
-//								tempB.add(o);
                     }
                 }
                 tempA.add(tempB);
@@ -864,6 +900,8 @@ public class FromQingliu2 {
         }
 
         for (JsonNode jn : before.at("/tableValues")) {
+
+            addKey(objectNode, before);
 
             ArrayNode tempB = mapper.createArrayNode();
 
@@ -876,7 +914,20 @@ public class FromQingliu2 {
             }
 
             int rowNum = row.get(0);
-            JsonNode afterTable = after.at("/tableValues/" + rowNum);
+            // 取after对应的行来比较
+
+            List<JsonNode> afterNodes = Streams.stream(after.at("/tableValues")).filter(tableValue -> {
+                return Streams.stream(tableValue).flatMap(j -> Streams.stream(j.at("/values")))
+                        .allMatch(j -> j.at("/ordinal").asInt() == rowNum);
+            }).collect(Collectors.toList());
+
+            // JsonNode afterTable = after.at("/tableValues/" + rowNum);
+            Preconditions.checkArgument(afterNodes.size() <= 1, "数据异常...");
+            JsonNode afterTable = mapper.createArrayNode();
+            if (afterNodes.size() > 0) {
+                afterTable = afterNodes.get(0);
+            }
+
             for (JsonNode tempC : jn) {
 
                 // afterTable的所有行
@@ -896,6 +947,7 @@ public class FromQingliu2 {
                             .put("queType", tempC.at("/queType").asInt());
 
                     ArrayNode tmpB = objectNodeT.withArray("values");
+                    addKey(objectNodeT, tempC);
                     tmpB.add(mapper.createObjectNode().putNull("value").put("ordinal", rowNum));
                     tempB.add(objectNodeT);
                 } else if (afterTable.isMissingNode()) {
@@ -996,6 +1048,16 @@ public class FromQingliu2 {
         return arrayNode;
     }
 
+    private static void addKey(ObjectNode obj, JsonNode from){
+        Iterator<String> keyIt = from.fieldNames();
+        while(keyIt.hasNext()){
+            String key = keyIt.next();
+            if(!key.equals("values") && !key.equals("tableValues")){
+                obj.set(key, from.findValue(key));
+            }
+        }
+    }
+
     @SuppressWarnings("unchecked")
     private static <T> T getValue(ArrayNode answer, String key) {
 
@@ -1026,3 +1088,4 @@ public class FromQingliu2 {
     }
 
 }
+
