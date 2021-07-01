@@ -1,11 +1,13 @@
 package boluo.basics;
 
 import com.clearspring.analytics.util.Lists;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Streams;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -297,6 +299,14 @@ public class Note07_Stream {
 		tableValues.add(values1);
 		tableValues.add(values2);
 
+		// 找到tableValues中行数为2的values, 也就是values2
+		List<JsonNode> list = Streams.stream(node.at("/tableValues")).filter(tableValue -> {
+			// tableValue还是一个数组
+			return Streams.stream(tableValue).flatMap(jn -> Streams.stream(jn.at("/values")))
+					.anyMatch(i -> i.at("/ordinal").asInt() == 2);
+		}).collect(Collectors.toList());
+
+		System.out.println(list);
 	}
 
 }
