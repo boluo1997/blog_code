@@ -26,6 +26,8 @@ public class QingliuTest2 {
         String randomKey = "key" + Math.round(Math.random() * 100);
         String title = "title" + Math.round(Math.random() * 100);
         ArrayNode result;
+        ObjectNode add = mapper.createObjectNode()
+                .put("_op", "add");
 
         ObjectNode value1 = kv(0, title, 8, "20");
         ObjectNode patch1 = kv(0, title, 8, "30")
@@ -36,6 +38,26 @@ public class QingliuTest2 {
         ArrayNode before = array(value1).deepCopy();
         Assert.assertEquals(array(result1), replace.invoke(null, before, array(patch1)));
         Assert.assertEquals(before, array(value1));
+
+        ObjectNode value2 = kv(2, title, 4, "20");
+        ObjectNode patch2 = kvNull(2, title, 4);
+        Assert.assertEquals(array(), invoke(replace, array(value2), array(patch2)));
+
+        ObjectNode patch3 = kvWithKV(3, title, 4, add, "20");
+        Assert.assertEquals(array(kv(3, title, 4, "20")), invoke(replace, array(), array(patch3)));
+
+        ObjectNode value4 = kv(3, title, 4, "20");
+        ObjectNode patch4 = kvWithKV(3, title, 4, add, "30");
+        Assert.assertEquals(array(kv(3, title, 4, "20", "30")), invoke(replace, array(value4), array(patch4)));
+    }
+
+    // 删除测试
+    @Test
+    public void replaceTest2() throws Throwable {
+        Method replace = FromQingliu2.class.getDeclaredMethod("replace", ArrayNode.class, ArrayNode.class);
+        replace.setAccessible(true);
+        String title = "title";
+        ArrayNode result;
 
         ///////////////////////
 
@@ -48,7 +70,7 @@ public class QingliuTest2 {
         ObjectNode result2 = kvT(0, title, 2,
                 kv(1, title, 8, "v1m"), kv(2, title, 8, "v2"),
                 kv(1, title, 8, "x1m"), kv(2, title, 8, "x2"));
-        Assert.assertEquals(array(result1, result2), replace.invoke(null, array(value1, value2), array(patch1, patch2)));
+        Assert.assertEquals(array(result2), replace.invoke(null, array(value2), array(patch2)));
 
         ///////////////////////
 
@@ -105,21 +127,6 @@ public class QingliuTest2 {
 
         result = invoke(replace, array(value6), array(patch6));
         Assert.assertEquals(array(result6), result);
-    }
-
-    // 删除测试
-    @Test
-    public void replaceTest2() throws Throwable {
-        Method replace = FromQingliu2.class.getDeclaredMethod("replace", ArrayNode.class, ArrayNode.class);
-        replace.setAccessible(true);
-        String title = "title";
-
-        ObjectNode value1 = kv(1, title, 4, "20");
-
-        // 删除
-        ObjectNode patch2 = kvNull(1, title, 4);
-
-        Assert.assertEquals(array(), invoke(replace, array(value1), array(patch2)));
     }
 
     @Test
@@ -304,6 +311,8 @@ public class QingliuTest2 {
                 .put("k1", "v1");
         ObjectNode kv2 = mapper.createObjectNode()
                 .put("k2", "v2");
+        ObjectNode add = mapper.createObjectNode()
+                .put("_op", "add");
 
         ObjectNode value1 = mapper.createObjectNode()
                 .put("queId", 1)
@@ -330,15 +339,18 @@ public class QingliuTest2 {
         value4.set("a", kv(4, title, 8));
 
         result = invoke(getPatchAnswer, array(value1, value2, value3, value4), "b", "b");
-        assertThat(result.get(0)).isEqualTo(kv(1, title, 8, "b1"));
-        assertThat(result.get(1)).isEqualTo(kv(2, title, 8, "b2"));
-        assertThat(result).noneMatch(i -> i.at("/queId").asInt() == 3);
+        assertThat(result).containsExactlyInAnyOrder(
+                kv(1, title, 8, "b1"),
+                kv(2, title, 8, "b2"),
+                kv(4, title, 8, "b1")
+        );
 
         result = invoke(getPatchAnswer, array(value1, value2, value3, value4), "b", "a");
-        assertThat(result.get(0)).isEqualTo(kv(1, title, 8, "a1"));
-        assertThat(result.get(1)).isEqualTo(kvNull(2, title, 8));
-        assertThat(result.get(2)).isEqualTo(kv(3, title, 8, "a3"));
-        assertThat(result).noneMatch(i -> i.at("/queId").asInt() == 4);
+        assertThat(result).containsExactlyInAnyOrder(
+                kv(1, title, 8, "a1"),
+                kvNull(2, title, 8),
+                kvWithKV(3, title, 8, add, "a3")
+        );
 
         ///////////////////////
 
