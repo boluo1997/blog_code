@@ -1,11 +1,13 @@
 package boluo.basics;
 
 import com.clearspring.analytics.util.Lists;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Streams;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -277,7 +279,34 @@ public class Note07_Stream {
 				.put("queTitle", "title")
 				.put("queType", 18);
 
+		ArrayNode tableValues = node.withArray("tableValues");
+		ArrayNode values1 = mapper.createArrayNode();
+		ArrayNode values2 = mapper.createArrayNode();
 
+		ObjectNode value1 = mapper.createObjectNode()
+				.put("queId", 41)
+				.put("qeuType", 8);
+		value1.withArray("values").add(mapper.createObjectNode().put("value", "a41").put("ordinal", 1));
+
+		ObjectNode value2 = mapper.createObjectNode()
+				.put("queId", 41)
+				.put("qeuType", 8);
+		value2.withArray("values").add(mapper.createObjectNode().put("value", "b41").put("ordinal", 2));
+
+		values1.add(value1);
+		values2.add(value2);
+
+		tableValues.add(values1);
+		tableValues.add(values2);
+
+		// 找到tableValues中行数为2的values, 也就是values2
+		List<JsonNode> list = Streams.stream(node.at("/tableValues")).filter(tableValue -> {
+			// tableValue还是一个数组
+			return Streams.stream(tableValue).flatMap(jn -> Streams.stream(jn.at("/values")))
+					.anyMatch(i -> i.at("/ordinal").asInt() == 2);
+		}).collect(Collectors.toList());
+
+		System.out.println(list);
 	}
 
 }
