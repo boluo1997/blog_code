@@ -277,6 +277,25 @@ public class Note07_Stream {
 				.put("queTitle", "title")
 				.put("queType", 18);
 
+		ArrayNode tableValues = node.withArray("tableValues");
+		ArrayNode values1 = mapper.createArrayNode();
+		ArrayNode values2 = mapper.createArrayNode();
+
+		ObjectNode value1 = mapper.createObjectNode()
+				.put("queId", 41)
+				.put("qeuType", 8);
+		value1.withArray("values").add(mapper.createObjectNode().put("value", "a41").put("ordinal", 1));
+
+		ObjectNode value2 = mapper.createObjectNode()
+				.put("queId", 41)
+				.put("qeuType", 8);
+		value2.withArray("values").add(mapper.createObjectNode().put("value", "b41").put("ordinal", 2));
+
+		values1.add(value1);
+		values2.add(value2);
+
+		tableValues.add(values1);
+		tableValues.add(values2);
 
 	}
 
