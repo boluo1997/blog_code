@@ -127,6 +127,18 @@ public class QingliuTest2 {
 
         result = invoke(replace, array(value6), array(patch6));
         Assert.assertEquals(array(result6), result);
+
+        ///////////////////////
+
+        ObjectNode value7 = kvT(7, title, 2);
+        ObjectNode patch7 = kvT(7, title, 2,
+                kv(1, title, 8, "a1"));
+
+        result = invoke(replace, array(value7), array(patch7));
+        Assert.assertEquals(
+                array(kvT(7, title, 2,
+                        kv(1, title, 8, "a1"))),
+                result);
     }
 
     @Test
@@ -467,18 +479,22 @@ public class QingliuTest2 {
                 kv(41, title, 8, "c41"), kv(42, title, 8, "c42"),
                 kv(41, title, 8, "d41"), kv(42, title, 8, "d42")
         ));
-        // TODO 暂时与顺序无关
-        ObjectNode expect7 = kvT(7, title, 2,
+        // 与顺序有关
+        assertThat(result).containsOnlyOnce(kvT(7, title, 2,
                 kv(41, title, 8, "a41"), null,
                 kv(41, title, 8, "b41"), null
-        );
-        assertThat(result).filteredOn(i -> i.at("/queId").asInt() == 7)
-                .hasSize(1)
-                .singleElement()
-                .matches(i -> {
-                    assertThat(i.at("/tableValues")).containsExactlyInAnyOrderElementsOf(expect7.at("/tableValues"));
-                    return true;
-                });
+        ));
+		/*ObjectNode expect7 = kvT(7, title, 2,
+				kv(41, title, 8, "a41"), null,
+				kv(41, title, 8, "b41"), null
+		);
+		assertThat(result).filteredOn(i -> i.at("/queId").asInt() == 7)
+				.hasSize(1)
+				.singleElement()
+				.matches(i -> {
+					assertThat(i.at("/tableValues")).containsExactlyInAnyOrderElementsOf(expect7.at("/tableValues"));
+					return true;
+				});*/
         assertThat(result).containsOnlyOnce(kvT(8, title, 2,
                 kv(41, title, 8, "a41m"), kv(42, title, 8)
         ));
@@ -507,6 +523,33 @@ public class QingliuTest2 {
                 kv(42, title, 8, "e42")
         ));
 
+        ///////////////////////
+
+        ObjectNode valuet10 = mapper.createObjectNode()
+                .put("queId", 10)
+                .put("queType", 18);
+        valuet10.set("b", kvT(10, title, 2,
+                kv(41, title, 8), kv(42, title, 8, "a42")
+        ));
+        valuet10.putNull("a");
+        result = invoke(getPatchAnswer, array(valuet10), "b", "a");
+        assertThat(result).hasSize(0);
+
+        ///////////////////////
+
+        ObjectNode valuet11 = mapper.createObjectNode()
+                .put("queId", 11)
+                .put("queType", 18);
+        valuet11.set("b", kvT(11, title, 2,
+                kv(41, title, 8, "a41")
+        ));
+        valuet11.set("a", kvT(11, title, 2,
+                kv(41, title, 8, "a41"), kv(42, title, 8, "a42")
+        ));
+        result = invoke(getPatchAnswer, array(valuet11), "b", "a");
+        assertThat(result).containsExactlyInAnyOrder(kvT(11, title, 2,
+                kv(41, title, 8, "a41"), kv(42, title, 8, "a42")
+        ));
     }
 
     private ArrayNode array(ObjectNode... obj) {
