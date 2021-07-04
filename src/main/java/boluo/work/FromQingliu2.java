@@ -699,7 +699,7 @@ public class FromQingliu2 {
                     if (!jn2.get().at("/values/0/value").isNull()) {
                         if (tempA.size() > 0) {
                             ObjectNode obj = mapper.createObjectNode();
-                            addKey(obj, jn1);
+                            // addKey(obj, jn1);
                             obj.set("tableValues", tempA);
                             resultAnswer.add(obj);
                         } else if (jn2.get().at("/_op").asText().equals("add")) {
