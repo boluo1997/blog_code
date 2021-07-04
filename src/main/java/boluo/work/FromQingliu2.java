@@ -621,7 +621,7 @@ public class FromQingliu2 {
         for (JsonNode jn1 : answer1) {
 
             Optional<ObjectNode> jn2 = Streams.stream(answer2).filter(i -> {
-                return i.at("/queId").asInt() == jn1.at("/queId").asInt();
+                return i.at("/queId").asInt() == jn1.at("/queId").asInt() && i.at("/queType").asInt() == jn1.at("/queType").asInt();
             }).map(i -> (ObjectNode) i).findAny();
 
             if (jn2.isPresent()) {
@@ -634,6 +634,11 @@ public class FromQingliu2 {
                     // 处理表格
                     if (jn2.get().at("/queType").asInt() == 18) {
 
+                        // answer1表格为空, 直接返回answer2
+                        if (jn1.at("/tableValues").isArray() && jn1.at("/tableValues").size() == 0) {
+                            return answer2;
+                        }
+
                         // 表格数量一致 有表格为[] 的情况
                         if (jn1.at("/tableValues").size() == jn2.get().at("/tableValues").size()) {
                             for (int i = 0; i < jn1.at("/tableValues").size(); i++) {
@@ -645,11 +650,23 @@ public class FromQingliu2 {
                         } else if (jn2.get().at("/tableValues").size() > 0) {
                             // jn2的表格中有数据, 按行列逐个替换jn1中的表格数据, jn2中没有的不替换
 
+                            // 取jn2所有行数
+                            Set<Integer> row2Set = Sets.newHashSet();
+                            for (JsonNode j : jn2.get().at("/tableValues")) {
+                                for (JsonNode rowJn : j) {
+                                    if (rowJn.at("/values").isArray() && rowJn.at("/values").size() != 0) {
+                                        row2Set.add(rowJn.at("/values/0/ordinal").asInt());
+                                    }
+                                }
+                            }
+
                             for (JsonNode temp1 : jn1.at("/tableValues")) {
                                 // jn1当前行数
                                 List<Integer> row1 = Lists.newArrayList();
                                 for (JsonNode temp2 : temp1) {
-                                    row1.add(temp2.at("/values/0/ordinal").asInt());
+                                    if (temp2.at("/values").isArray() && temp2.at("/values").size() != 0) {
+                                        row1.add(temp2.at("/values/0/ordinal").asInt());
+                                    }
                                 }
                                 int rowNum1 = row1.get(0);
 
@@ -657,7 +674,9 @@ public class FromQingliu2 {
                                     // jn2当前行数
                                     List<Integer> row2 = Lists.newArrayList();
                                     for (JsonNode temp4 : temp3) {
-                                        row2.add(temp4.at("/values/0/ordinal").asInt());
+                                        if (temp4.at("/values").isArray() && temp4.at("/values").size() != 0) {
+                                            row2.add(temp4.at("/values/0/ordinal").asInt());
+                                        }
                                     }
                                     int rowNum2 = row2.isEmpty() ? -1 : row2.get(0);
 
@@ -665,23 +684,35 @@ public class FromQingliu2 {
                                     if (rowNum1 == rowNum2) {
                                         ArrayNode resultA = replace((ArrayNode) temp1, (ArrayNode) temp3);
                                         tempA.add(resultA);
-
                                     }
                                 }
+
+                                // 如果jn1当前行数在jn2中没有, 添加jn1行的数据
+                                if (!row2Set.contains(rowNum1)) {
+                                    tempA.add(temp1);
+                                }
+
                             }
                         }
                     }
 
                     if (!jn2.get().at("/values/0/value").isNull()) {
-                        resultAnswer.add(jn2.get());
                         if (tempA.size() > 0) {
-                            resultAnswer = mapper.createArrayNode();
                             ObjectNode obj = mapper.createObjectNode();
-                            obj.put("queId", jn2.get().at("/queId").asInt())
-                                    .put("queType", jn2.get().at("/queType").asInt());
+                            addKey(obj, jn1);
                             obj.set("tableValues", tempA);
                             resultAnswer.add(obj);
+                        } else if (jn2.get().at("/_op").asText().equals("add")) {
+                            // 添加
+                            ArrayNode values = (ArrayNode) jn1.at("/values");
+                            for (JsonNode value : jn2.get().at("/values")) {
+                                values.add(value);
+                            }
+                            resultAnswer.add(jn1);
+                        } else {
+                            resultAnswer.add(jn2.get());
                         }
+
                     }
 
                 }
@@ -697,23 +728,24 @@ public class FromQingliu2 {
             // 没有的添加
 
             Optional<ObjectNode> jn1 = Streams.stream(answer1).filter(i -> {
-                return i.at("/queId").asInt() == jn2.at("/queId").asInt();
+                return i.at("/queId").asInt() == jn2.at("/queId").asInt() && i.at("/queType").asInt() == jn2.at("/queType").asInt();
             }).map(i -> (ObjectNode) i).findAny();
 
-            if (!jn1.isPresent()) {
+            if (!jn1.isPresent() && !jn2.at("/values/0/value").isNull()) {
                 resultAnswer.add(jn2);
             } else {
 
-                // 处理表格添加的 先遍历结果
+                // 处理表格添加的 (增加行) 先遍历结果
 
                 Optional<ObjectNode> jnRes = Streams.stream(resultAnswer).filter(i -> {
-                    return i.at("/queId").asInt() == jn2.at("/queId").asInt();
+                    return i.at("/queId").asInt() == jn2.at("/queId").asInt() && i.at("/queType").asInt() == jn2.at("/queType").asInt();
                 }).map(i -> (ObjectNode) i).findAny();
 
                 if (jnRes.isPresent()) {
 
                     // 先遍历table2
                     for (JsonNode tempC : jn2.at("/tableValues")) {
+                        // for(int i = 0; i< jn2.at("/tableValues").size(); i++){
                         // 先拿到table2当前行
                         List<Integer> row2 = Lists.newArrayList();
                         for (JsonNode tempD : tempC) {
@@ -738,12 +770,50 @@ public class FromQingliu2 {
                                 }
                             }
                             res.add(resArray);
+
+                            // res排序
+                            List<JsonNode> nodeList = Lists.newArrayList();
+                            for (int i = 0; i < res.size(); i++) {
+                                nodeList.add(res.get(i));
+                            }
+
+                            nodeList.sort((jn11, jn21) -> {
+                                List<Integer> num1List = Lists.newArrayList();
+                                for (JsonNode jn : jn11) {
+                                    if (jn.at("/values").isArray() && jn.at("/values").size() != 0) {
+                                        num1List.add(jn.at("/values/0/ordinal").asInt());
+                                    }
+                                }
+
+                                List<Integer> num2List = Lists.newArrayList();
+                                for (JsonNode jn : jn21) {
+                                    if (jn.at("/values").isArray() && jn.at("/values").size() != 0) {
+                                        num2List.add(jn.at("/values/0/ordinal").asInt());
+                                    }
+                                }
+                                int num1 = num1List.isEmpty() ? 0 : num1List.get(0);
+                                int num2 = num2List.isEmpty() ? 0 : num2List.get(0);
+                                return num1 - num2;
+                            });
+
+                            res.removeAll();
+                            for (JsonNode jn : nodeList) {
+                                res.add(jn);
+                            }
+
                         }
                     }
                 }
             }
         }
-        return resultAnswer;
+
+        ArrayNode res = mapper.createArrayNode();
+        Streams.stream(resultAnswer).peek(i -> {
+            ((ObjectNode) i).remove("_op");
+        }).forEach(res::add);
+
+        return res;
+
     }
 
     private static ArrayNode getPatchAnswer(ArrayNode modifies, String beforeKey, String afterKey) {
