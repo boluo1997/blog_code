@@ -92,7 +92,7 @@ public class FromQingliu2 {
 				.add("audit_name", "string")
 				.add("audit_result", "int")
 				.add("audit_time", "timestamp")
-				.add("audit", new StructType()
+				.add("auditor", new StructType()
 						.add("uid", "long")
 						.add("nickname", "string")
 						.add("email", "string")
@@ -114,23 +114,34 @@ public class FromQingliu2 {
 			appMap.put(jn.at("/appKey").asText(), jn.at("/appName").asText());
 		}
 
-		// appMap.keySet().retainAll(ImmutableList.of("02f2a2f4"));
+		// appMap.keySet().retainAll(ImmutableList.of("1670d156"));
 		for (String appId : appMap.keySet()) {
 
-			// 查询该条appId下最大的updateTime
 			Dataset<Row> df1 = spark.read().format("delta").load(localQingliuPath);
-			List<Row> maxUpdateTimeList = df1.where("app_id='" + appId + "'").select(max("update_time")).collectAsList();
+			df1.registerTempTable("qingliu");
 
-			LocalDateTime localMaxUpdateTime = maxUpdateTimeList.get(0).isNullAt(0)
-					? LocalDateTime.of(2016, 1, 1, 0, 0)
-					: ((Timestamp) maxUpdateTimeList.get(0).get(0)).toLocalDateTime().minusHours(24);
+			// 查询本地轻流表
+			List<Row> localApplyList;
+			if (df1.schema().isEmpty()) {
+				localApplyList = Lists.newArrayList();
+			} else {
+				String sql = "select apply_id, log_id, update_time, after\n" +
+						"from\n" +
+						"(\n" +
+						"    select apply_id, log_id, update_time, after, row_number() over(partition by apply_id order by log_id desc) rk\n" +
+						"    from qingliu\n" +
+						"    where app_id = '" + appId + "'" +
+						") t\n" +
+						"where t.rk = 1 and cast(log_id as string) != 'D' ";
+				localApplyList = spark.sql(sql).collectAsList();
+			}
 
-//			LocalDateTime localMaxUpdateTime = localApplyList.stream()
-//					.map(i -> i.<Timestamp>getAs("update_time"))
-//					.map(Timestamp::toLocalDateTime)
-//					.max(LocalDateTime::compareTo)
-//					.orElse(LocalDateTime.of(2016, 1, 1, 0, 0))
-//					.minusHours(24);
+			LocalDateTime localMaxUpdateTime = localApplyList.stream()
+					.map(i -> i.<Timestamp>getAs("update_time"))
+					.map(Timestamp::toLocalDateTime)
+					.max(LocalDateTime::compareTo)
+					.orElse(LocalDateTime.of(2016, 1, 1, 0, 0))
+					.minusHours(24);
 
 			LocalDateTime insertUpdateTime = LocalDateTime.now();
 
@@ -150,11 +161,16 @@ public class FromQingliu2 {
 					.put("isAscend", false);
 
 			// 分页获取应用的数据, 通过appId获取appId下所有的applyId
-			JsonNode applyIdResultNode = apiRequest(HttpMethod.POST, String.format("%s/app/%s/apply/filter", baseUri, appId),
+			JsonNode filterResult = apiRequest(HttpMethod.POST, String.format("%s/app/%s/apply/filter", baseUri, appId),
 					apiToken, userId, requestBody);
 
-			int applyIdCount = applyIdResultNode.at("/result/resultAmount").asInt();
-			JsonNode applyAnswersNode = applyIdResultNode.at("/result/result");
+			// 第一页第一条数据的audit_time, 最后存储时过滤用
+			LocalDateTime checkMaxTime = filterResult.at("/result/result").size() != 0 && Objects.nonNull(getValue((ArrayNode) filterResult.at("/result/result/0/answers"), "更新时间"))
+					? getValue((ArrayNode) filterResult.at("/result/result/0/answers"), "更新时间")
+					: LocalDateTime.of(2100, 1, 1, 0, 0);
+
+			int applyIdCount = filterResult.at("/result/resultAmount").asInt();
+			JsonNode applyAnswersNode = filterResult.at("/result/result");
 
 			Map<Integer, ArrayNode> checkAnswersMap = Maps.newTreeMap();
 			for (JsonNode jn : applyAnswersNode) {
@@ -206,38 +222,6 @@ public class FromQingliu2 {
 				lastTime = lastTime1;
 			}
 
-			// TODO 去掉checkAnswerMap中时间小于localMaxUpdateTime的数据
-			Set<Integer> deleteSet = Streams.stream(checkAnswersMap.entrySet())
-					.filter(kv -> {
-						LocalDateTime currTime = getValue(kv.getValue(), "更新时间");
-						return currTime.compareTo(localMaxUpdateTime) < 0;
-					})
-					.map(Map.Entry::getKey)
-					.collect(Collectors.toSet());
-			checkAnswersMap.keySet().removeAll(deleteSet);
-
-			// 判断是否有新添加或修改的
-			if (checkAnswersMap.isEmpty()) {
-				continue;
-			}
-
-			// 有添加或修改的才查询本地轻流表
-			List<Row> localApplyList;
-			if (df1.count() == 0) {
-				localApplyList = Lists.newArrayList();
-			} else {
-				df1.registerTempTable("qingliu");
-				String sql = "select apply_id, log_id, update_time, after\n" +
-						"from\n" +
-						"(\n" +
-						"    select apply_id, log_id, update_time, after, row_number() over(partition by apply_id order by log_id desc) rk\n" +
-						"    from qingliu\n" +
-						"    where app_id = '" + appId + "'" +
-						") t\n" +
-						"where t.rk = 1 and cast(log_id as string) != 'D' ";
-				localApplyList = spark.sql(sql).collectAsList();
-			}
-
 			// 判断3 是否有删除的
 			// 先找出线上有的数据, 但是本地没有的applyId
 			Set<Integer> currAddApplyIdSet = Sets.difference(
@@ -252,9 +236,8 @@ public class FromQingliu2 {
 							", checkAnswersMap数量" + checkAnswersMap.size()
 			);
 
-			if (localApplyList.size() + currAddApplyIdSet.size() == applyIdCount) {
-				// 没有删除的
-			} else {
+			List<Row> deleteLine = Lists.newArrayList();
+			if (localApplyList.size() + currAddApplyIdSet.size() > applyIdCount) {
 				// 有删除的, 处理
 				ObjectNode deleteRequestBody = mapper.createObjectNode()
 						.put("pageNum", 1)
@@ -273,14 +256,15 @@ public class FromQingliu2 {
 				deleteRequestBody.withArray("queries")
 						.addObject()
 						.put("queId", 3)
-						.put("minValue", "2019-12-11 16:10:30");
+						// "2019-12-11 16:10:30"
+						.put("minValue", lastTime.toString());
 
 				// 获取剩下所有的数据, 更新到checkAnswersMap中
-				JsonNode data1 = apiRequest(HttpMethod.POST, String.format("%s/app/%s/apply/filter", baseUri, appId),
+				JsonNode afterApplyIdResult = apiRequest(HttpMethod.POST, String.format("%s/app/%s/apply/filter", baseUri, appId),
 						apiToken, userId, deleteRequestBody);
 
-				Preconditions.checkArgument(data1.at("/errCode").intValue() == 0);
-				int pageAmount = data1.at("/result/pageAmount").asInt();
+				Preconditions.checkArgument(afterApplyIdResult.at("/errCode").intValue() == 0);
+				int pageAmount = afterApplyIdResult.at("/result/pageAmount").asInt();
 				Stream<JsonNode> data2 = Stream.iterate(2, j -> j + 1)
 						.limit(Math.max(pageAmount - 1, 0))
 						.map(k -> {
@@ -289,7 +273,7 @@ public class FromQingliu2 {
 									apiToken, userId, deleteRequestBody);
 						});
 
-				Stream.concat(Stream.of(data1), data2)
+				Stream.concat(Stream.of(afterApplyIdResult), data2)
 						.forEach(r -> {
 							JsonNode jsonNode = r.at("/result/result");
 							for (JsonNode jn : jsonNode) {
@@ -299,18 +283,44 @@ public class FromQingliu2 {
 
 				// 此时的checkAnswersMap中拥有线上全量的applyId
 				// 本地的 - 线上全部的 = 删除的
-				Stream<Row> deleteApply = localApplyList.stream().filter(i -> {
+				Stream<Row> deleteApplyId = localApplyList.stream().filter(i -> {
 					Integer k = i.getAs(0);
-					return checkAnswersMap.containsKey(k);
+					return !checkAnswersMap.containsKey(k);
 				});
 
-//				for (Iterator<Row> it = deleteApply.iterator(); it.hasNext();){
-//					Row curr = it.next();
-//				}
-				deleteApply.forEach(i -> {
-					// TODO 给这些 applyId 添加删除行, logId = 'D'
-					// throw new UnsupportedOperationException("删除行未添加...");
+				deleteApplyId.forEach(i -> {
+					int applyId = i.getAs(0);
+					Row row = RowFactory.create(appId, appMap.get(appId), applyId, "D", null, "删除", -1, null, null, null);
+					deleteLine.add(row);
 				});
+			}
+
+			// 存储删除行
+			String insertTimeStr = String.valueOf(insertUpdateTime.atZone(ZoneId.systemDefault()).toEpochSecond());
+			Dataset<Row> deleteData = spark.createDataFrame(deleteLine, qingliuStruct)
+					.withColumn("update_time", to_timestamp(from_unixtime(expr(insertTimeStr))))
+					.coalesce(1);
+
+			// Dataset<Row> resultData = writeData.join(deleteData, "app_id");
+//			if (deleteData.count() > 0) {
+//				Outputs.replace(deleteData, localQingliuPath,
+//						expr(String.format("t.app_id='%s' and s.apply_id=t.apply_id and s.log_id=t.log_id", appId)),
+//						"app_id");
+//			}
+
+			// 去掉checkAnswerMap中时间小于localMaxUpdateTime的数据
+			Set<Integer> deleteSet = checkAnswersMap.entrySet().stream()
+					.filter(kv -> {
+						LocalDateTime currTime = getValue(kv.getValue(), "更新时间");
+						return currTime.compareTo(localMaxUpdateTime) < 0;
+					})
+					.map(Map.Entry::getKey)
+					.collect(Collectors.toSet());
+			checkAnswersMap.keySet().removeAll(deleteSet);
+
+			// 判断是否有新添加或修改的
+			if (checkAnswersMap.isEmpty()) {
+				continue;
 			}
 
 			// 处理添加的
@@ -323,16 +333,19 @@ public class FromQingliu2 {
 
 				beforeMap.put(row.getAs(0), Tuple2.apply(row.getAs(1), onlineBefore));
 			}
-			// checkAnswersMap.keySet().retainAll(ImmutableList.of(8401069));
-			List<Row> updateRowList = addQingliu(appId, appMap.get(appId), checkAnswersMap, beforeMap,
-					apiToken, webToken);
+
+			List<Row> updateRowList = addQingliu(appId, appMap.get(appId), checkAnswersMap, beforeMap, webToken);
+
+			// 过滤掉updateRowList中audit_time大于checkMaxTime的数据
+			List<Row> filterRowList = updateRowList.stream()
+					.filter(i -> {
+						return (((Timestamp) i.getAs(7)).toLocalDateTime()).compareTo(checkMaxTime) <= 0;
+					}).collect(Collectors.toList());
 
 			// 存储
-			String insertTimeStr = String.valueOf(insertUpdateTime.atZone(ZoneId.systemDefault()).toEpochSecond());
-			Dataset<Row> writeData = spark.createDataFrame(updateRowList, qingliuStruct)
+			Dataset<Row> writeData = spark.createDataFrame(filterRowList, qingliuStruct)
 					.withColumn("update_time", to_timestamp(from_unixtime(expr(insertTimeStr))))
 					.coalesce(1);
-
 //			Outputs.replace(writeData, localQingliuPath,
 //					expr(String.format("t.app_id='%s' and s.apply_id=t.apply_id and s.log_id=t.log_id", appId)),
 //					"app_id");
@@ -341,35 +354,25 @@ public class FromQingliu2 {
 
 	}
 
-	private static List<Row> addQingliu(String appId, String appName, Map<Integer, ArrayNode> checkAnswersMap, Map<Integer, Tuple2<String, ArrayNode>> beforeMap,
-										String apiToken, String webToken) throws IOException {
+	private static List<Row> addQingliu(String appId, String appName, Map<Integer, ArrayNode> checkAnswersMap,
+										Map<Integer, Tuple2<String, ArrayNode>> beforeMap, String webToken) throws IOException {
 
 		List<Row> updateRowList = Lists.newArrayList();
 		for (Integer applyId : checkAnswersMap.keySet()) {
 
-			// 调用: 获取单条数据的流程日志  第一条applyId 695872
-//			JsonNode qingliuLogIdNode = apiRequest(HttpMethod.GET, String.format("%s/apply/%s/auditRecord", baseUri, applyId),
-//					apiToken, null, null);
-
-			JsonNode webQingliuLogIdNode = webRequest(webToken, HttpMethod.GET,
+			// 调用: 获取单条数据的流程日志
+			JsonNode qingliuLogIdList = webRequest(webToken, HttpMethod.GET,
 					String.format("%s/app/%s/apply/%d/auditRecord?role=1", baseWebUri, appId, applyId),
 					String.format("https://ding.qingflow.com/arch/app/%s/all;type=8?applyId=%d", appId, applyId),
 					null
 			);
-			ObjectNode qingliuLogIdNode = formatAuditRecord(webQingliuLogIdNode);
-
-			// 存放添加的logId对应的节点, 也就是online接口返回的整个结果
-			List<JsonNode> updateLogIdList = Lists.newArrayList();
+			ObjectNode qingliuLogIdNode = formatAuditRecord(qingliuLogIdList);
 
 			boolean first = beforeMap.containsKey(applyId);
 			String localMaxLogId = first ? beforeMap.get(applyId)._1 : "-1";
 			ArrayNode onlineBefore = first
 					? beforeMap.get(applyId)._2
 					: mapper.createArrayNode();
-
-			if (applyId == 3586014) {
-				System.out.println("aaa");
-			}
 
 			if (!first) {
 
@@ -382,14 +385,19 @@ public class FromQingliu2 {
 				onlineBefore.add(noNode);
 
 				// 申请人节点
-				if (!qingliuLogIdNode.at("/result/auditRecords/0/auditUser").isNull() && !Strings.isNullOrEmpty(qingliuLogIdNode.at("/result/auditRecords/0/auditUser/values/0/value").asText())) {
+				if (!qingliuLogIdNode.at("/result/auditRecords/0/auditUser").isNull()
+						&& !Strings.isNullOrEmpty(qingliuLogIdNode.at("/result/auditRecords/0/auditUser/nickName").asText())
+						&& !qingliuLogIdNode.at("/result/auditRecords/0/auditUser/nickName").asText().equals("null")) {
 					ObjectNode auditUserNode = (ObjectNode) qingliuLogIdNode.at("/result/auditRecords/0/auditUser");
 					ObjectNode formatUserNode = formatUserNode(auditUserNode);
 					onlineBefore.add(formatUserNode);
 				}
 			}
 
-			// 获取qingliuLogIdNode中所有的qingliuLogId
+			// 存放添加的logId对应的节点, 也就是online接口返回的整个结果
+			List<JsonNode> updateLogIdList = Lists.newArrayList();
+
+			// 获取qingliuLogIdList中所有的qingliuLogId
 			for (JsonNode jn : qingliuLogIdNode.at("/result/auditRecords")) {
 				String qingliuLogId = jn.at("/auditRcdId").asText();
 				if (String.CASE_INSENSITIVE_ORDER.compare(qingliuLogId, localMaxLogId) > 0) {
@@ -401,18 +409,12 @@ public class FromQingliu2 {
 			for (JsonNode jn : updateLogIdList) {
 
 				Integer logId = jn.at("/auditRcdId").asInt();
-//				JsonNode resultNode = apiRequest(HttpMethod.GET, String.format("%s/apply/%s/auditRecord/%s", baseUri, applyId, logId),
-//						token, userId, null);
-
 				ObjectNode webAuditRecordResult = webRequest(webToken, HttpMethod.GET,
 						String.format("%s/app/%s/apply/%d/auditRecord/%d?role=1", baseWebUri, appId, applyId, logId),
 						String.format("https://ding.qingflow.com/arch/app/%s/all;type=8?applyId=%d", appId, applyId),
 						null
 				);
 
-				if (logId == 21959397) {
-					System.out.println("/aaa");
-				}
 				ObjectNode auditRecordResult = formatAuditRecordDetail(webAuditRecordResult);
 
 				ArrayNode beforePatch = getPatchAnswer((ArrayNode) auditRecordResult.at("/auditModifies"), "beforeAnswer", "beforeAnswer");
@@ -885,11 +887,23 @@ public class FromQingliu2 {
 								nodeList.add(res.get(i));
 							}
 
-							nodeList.sort(new Comparator<JsonNode>() {
-								@Override
-								public int compare(JsonNode jn1, JsonNode jn2) {
-									return jn1.at("/0/values/0/ordinal").asInt() - jn2.at("/0/values/0/ordinal").asInt();
+							nodeList.sort((jn11, jn21) -> {
+								List<Integer> num1List = Lists.newArrayList();
+								for (JsonNode jn : jn11) {
+									if (jn.at("/values").isArray() && jn.at("/values").size() != 0) {
+										num1List.add(jn.at("/values/0/ordinal").asInt());
+									}
 								}
+
+								List<Integer> num2List = Lists.newArrayList();
+								for (JsonNode jn : jn21) {
+									if (jn.at("/values").isArray() && jn.at("/values").size() != 0) {
+										num2List.add(jn.at("/values/0/ordinal").asInt());
+									}
+								}
+								int num1 = num1List.isEmpty() ? 0 : num1List.get(0);
+								int num2 = num2List.isEmpty() ? 0 : num2List.get(0);
+								return num1 - num2;
 							});
 
 							res.removeAll();
@@ -1140,11 +1154,23 @@ public class FromQingliu2 {
 			nodeList.add(tempA.get(i));
 		}
 
-		nodeList.sort(new Comparator<JsonNode>() {
-			@Override
-			public int compare(JsonNode jn1, JsonNode jn2) {
-				return jn1.at("/0/values/0/ordinal").asInt() - jn2.at("/0/values/0/ordinal").asInt();
+		nodeList.sort((jn1, jn21) -> {
+			List<Integer> num1List = Lists.newArrayList();
+			for (JsonNode jn : jn1) {
+				if (jn.at("/values").isArray() && jn.at("/values").size() != 0) {
+					num1List.add(jn.at("/values/0/ordinal").asInt());
+				}
 			}
+
+			List<Integer> num2List = Lists.newArrayList();
+			for (JsonNode jn : jn21) {
+				if (jn.at("/values").isArray() && jn.at("/values").size() != 0) {
+					num2List.add(jn.at("/values/0/ordinal").asInt());
+				}
+			}
+			int num1 = num1List.get(0);
+			int num2 = num2List.get(0);
+			return num1 - num2;
 		});
 
 		tempA.removeAll();
