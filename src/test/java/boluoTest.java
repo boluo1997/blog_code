@@ -68,4 +68,11 @@ public class boluoTest {
 		stringList.sort((m, n) -> m.compareTo(n));
 		System.out.println(stringList);
 	}
+
+	@Test
+	public void func5() {
+		// \u000d System.out.println("注释中的代码也会执行！！！");
+	}
+
+
 }
