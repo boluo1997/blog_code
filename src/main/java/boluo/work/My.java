@@ -1450,5 +1450,47 @@ public class My {
         }
     }
 
+    public static String getLeadPartition(String path, String part, Instant ts) throws IOException {
+
+        List<String> results = com.clearspring.analytics.util.Lists.newArrayList();
+        Path parentPath = new Path(path);
+
+        FileSystem fs = FileSystem.get(parentPath.toUri(), SparkSession.active().sparkContext().hadoopConfiguration());
+        FileStatus[] fsParentFiles = fs.listStatus(parentPath);
+        List<FileStatus> fsParentLists = Arrays.asList(fsParentFiles);
+        Collections.sort(fsParentLists);
+        for (FileStatus fileParent : fsParentLists) {
+
+            if (fileParent.getPath().toString().contains(part + "=__HIVE_DEFAULT_PARTITION__")) {
+                continue;
+            }
+            int parentNameIndex = fileParent.getPath().toString().lastIndexOf("/");
+            String parentName = fileParent.getPath().toString().substring(parentNameIndex + 1);
+
+            if (parentName.startsWith(part + "=")) {
+
+                // 遍历目录下每个文件
+                FileStatus[] fsFiles = fs.listStatus(fileParent.getPath());
+                for (FileStatus fileChild : fsFiles) {
+
+                    // 如果找到文件修改时间大于传入时间的情况
+                    if (ts.compareTo(Instant.ofEpochMilli(fileChild.getModificationTime())) < 0) {
+                        int index = fileParent.getPath().toString().indexOf("=");
+                        String pathName = fileParent.getPath().toString().substring(index + 1);
+                        results.add(pathName);
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (results.size() == 0) {
+            return null;
+        } else {
+            // 字符串排序, 返回第一个
+            Collections.sort(results);
+            return results.get(0);
+        }
+    }
 
 }
