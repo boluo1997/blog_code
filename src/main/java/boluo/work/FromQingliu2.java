@@ -71,6 +71,7 @@ public class FromQingliu2 {
 
 	public static void main(String[] args) throws Exception {
 		SparkSession spark = SparkSession.builder()
+				.config("spark.maxRemoteBlockSizeFetchToMem", "64m")
 				.getOrCreate();
 
 		CommandLine cli = new GnuParser().parse(new Options()
@@ -87,7 +88,7 @@ public class FromQingliu2 {
 				.add("app_id", "string")
 				.add("app_name", "string")
 				.add("apply_id", "int")
-				.add("log_id", "string")
+				.add("log_id", "int")
 				.add("create_time", "timestamp")
 				.add("audit_name", "string")
 				.add("audit_result", "int")
@@ -114,7 +115,6 @@ public class FromQingliu2 {
 			appMap.put(jn.at("/appKey").asText(), jn.at("/appName").asText());
 		}
 
-		// appMap.keySet().retainAll(ImmutableList.of("1670d156"));
 		for (String appId : appMap.keySet()) {
 
 			Dataset<Row> df1 = spark.read().format("delta").load(localQingliuPath);
@@ -132,7 +132,7 @@ public class FromQingliu2 {
 						"    from qingliu\n" +
 						"    where app_id = '" + appId + "'" +
 						") t\n" +
-						"where t.rk = 1 and cast(log_id as string) != 'D' ";
+						"where t.rk = 1 and log_id != '" + Integer.MAX_VALUE + "'";
 				localApplyList = spark.sql(sql).collectAsList();
 			}
 
@@ -144,6 +144,7 @@ public class FromQingliu2 {
 					.minusHours(24);
 
 			LocalDateTime insertUpdateTime = LocalDateTime.now();
+			String insertTimeStr = String.valueOf(insertUpdateTime.atZone(ZoneId.systemDefault()).toEpochSecond());
 
 			// 请求参数 - 分页查询
 			ObjectNode requestBody = mapper.createObjectNode()
@@ -290,23 +291,20 @@ public class FromQingliu2 {
 
 				deleteApplyId.forEach(i -> {
 					int applyId = i.getAs(0);
-					Row row = RowFactory.create(appId, appMap.get(appId), applyId, "D", null, "删除", -1, null, null, null);
+					Row row = RowFactory.create(appId, appMap.get(appId), applyId, Integer.MAX_VALUE, null, "删除", -1, Timestamp.valueOf(insertUpdateTime), null, null);
 					deleteLine.add(row);
 				});
-			}
 
-			// 存储删除行
-			String insertTimeStr = String.valueOf(insertUpdateTime.atZone(ZoneId.systemDefault()).toEpochSecond());
-			Dataset<Row> deleteData = spark.createDataFrame(deleteLine, qingliuStruct)
-					.withColumn("update_time", to_timestamp(from_unixtime(expr(insertTimeStr))))
-					.coalesce(1);
 
-			// Dataset<Row> resultData = writeData.join(deleteData, "app_id");
-//			if (deleteData.count() > 0) {
+				// 存储删除行
+				Dataset<Row> deleteData = spark.createDataFrame(deleteLine, qingliuStruct)
+						.withColumn("update_time", to_timestamp(from_unixtime(expr(insertTimeStr))))
+						.coalesce(1);
+
 //				Outputs.replace(deleteData, localQingliuPath,
 //						expr(String.format("t.app_id='%s' and s.apply_id=t.apply_id and s.log_id=t.log_id", appId)),
 //						"app_id");
-//			}
+			}
 
 			// 去掉checkAnswerMap中时间小于localMaxUpdateTime的数据
 			Set<Integer> deleteSet = checkAnswersMap.entrySet().stream()
@@ -324,7 +322,7 @@ public class FromQingliu2 {
 			}
 
 			// 处理添加的
-			Map<Integer, Tuple2<String, ArrayNode>> beforeMap = Maps.newHashMap();
+			Map<Integer, Tuple2<Integer, ArrayNode>> beforeMap = Maps.newHashMap();
 			for (Row row : localApplyList) {
 
 				ArrayNode onlineBefore = Strings.isNullOrEmpty(row.getAs(3))
@@ -343,19 +341,30 @@ public class FromQingliu2 {
 					}).collect(Collectors.toList());
 
 			// 存储
-			Dataset<Row> writeData = spark.createDataFrame(filterRowList, qingliuStruct)
-					.withColumn("update_time", to_timestamp(from_unixtime(expr(insertTimeStr))))
-					.coalesce(1);
+			Dataset<Row> writeData = createDataFrame(filterRowList, qingliuStruct)
+					.withColumn("update_time", to_timestamp(from_unixtime(expr(insertTimeStr))));
 //			Outputs.replace(writeData, localQingliuPath,
 //					expr(String.format("t.app_id='%s' and s.apply_id=t.apply_id and s.log_id=t.log_id", appId)),
 //					"app_id");
-
+			SparkSession.active().sqlContext().clearCache();
 		}
 
 	}
 
+	private static Dataset<Row> createDataFrame(List<Row> rows, StructType schema) {
+		int blockSize = 500;
+		Optional<Dataset<Row>> result = Stream.iterate(0, i -> i + blockSize)
+				.limit((rows.size() + blockSize - 1) / blockSize)
+				.map(i -> SparkSession.active().createDataFrame(
+						rows.subList(i, Math.min(i + blockSize, rows.size())),
+						schema))
+				.reduce(Dataset::unionAll);
+		Preconditions.checkArgument(result.isPresent());
+		return result.get();
+	}
+
 	private static List<Row> addQingliu(String appId, String appName, Map<Integer, ArrayNode> checkAnswersMap,
-										Map<Integer, Tuple2<String, ArrayNode>> beforeMap, String webToken) throws IOException {
+										Map<Integer, Tuple2<Integer, ArrayNode>> beforeMap, String webToken) throws IOException {
 
 		List<Row> updateRowList = Lists.newArrayList();
 		for (Integer applyId : checkAnswersMap.keySet()) {
@@ -369,7 +378,7 @@ public class FromQingliu2 {
 			ObjectNode qingliuLogIdNode = formatAuditRecord(qingliuLogIdList);
 
 			boolean first = beforeMap.containsKey(applyId);
-			String localMaxLogId = first ? beforeMap.get(applyId)._1 : "-1";
+			int localMaxLogId = first ? beforeMap.get(applyId)._1 : -1;
 			ArrayNode onlineBefore = first
 					? beforeMap.get(applyId)._2
 					: mapper.createArrayNode();
@@ -399,8 +408,8 @@ public class FromQingliu2 {
 
 			// 获取qingliuLogIdList中所有的qingliuLogId
 			for (JsonNode jn : qingliuLogIdNode.at("/result/auditRecords")) {
-				String qingliuLogId = jn.at("/auditRcdId").asText();
-				if (String.CASE_INSENSITIVE_ORDER.compare(qingliuLogId, localMaxLogId) > 0) {
+				int qingliuLogId = jn.at("/auditRcdId").asInt();
+				if (qingliuLogId > localMaxLogId) {
 					updateLogIdList.add(jn);
 				}
 			}
@@ -447,7 +456,7 @@ public class FromQingliu2 {
 				String onlineAfter_ = Objects.isNull(onlineAfter) ? null : onlineAfter.toString();
 
 				Row auditRow = uid == 0L ? null : RowFactory.create(uid, nickName, email, head);
-				Row lineRow = RowFactory.create(appId, appName, applyId, String.valueOf(logId), createTime, auditName,
+				Row lineRow = RowFactory.create(appId, appName, applyId, logId, createTime, auditName,
 						auditResult, auditTime, auditRow, onlineAfter_);
 
 				tempUpdateRowList.add(lineRow);
@@ -1089,8 +1098,16 @@ public class FromQingliu2 {
 							if (tempD.at("/values").isArray() && tempD.at("/values").size() != 0 && !tempD.at("/values/0/value").isNull()) {
 								tempB.add(tempD);
 							} else if (tempC.at("/values").isArray() && tempC.at("/values").size() != 0 && tempD.at("/values").size() == 0) {
-								// before values not [], after values is []
-								tempB.add(tempD);
+								// before values not [], after values is [], 代表删除: value:null
+								// tempB.add(tempD);
+								ObjectNode objectNodeT = mapper.createObjectNode();
+								objectNodeT.put("queId", tempC.at("/queId").asInt())
+										.put("queType", tempC.at("/queType").asInt());
+
+								ArrayNode tmpB = objectNodeT.withArray("values");
+								addKey(objectNodeT, tempC);
+								tmpB.add(mapper.createObjectNode().putNull("value").put("ordinal", rowNum));
+								tempB.add(objectNodeT);
 							}
 						}
 					}
