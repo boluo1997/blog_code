@@ -496,7 +496,7 @@ public class QingliuTest2 {
 					return true;
 				});*/
         assertThat(result).containsOnlyOnce(kvT(8, title, 2,
-                kv(41, title, 8, "a41m"), kv(42, title, 8)
+                kv(41, title, 8, "a41m"), kvNull(42, title, 8)
         ));
 
         ///////////////////////
