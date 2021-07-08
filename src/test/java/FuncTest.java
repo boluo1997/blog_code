@@ -554,4 +554,138 @@ public class FuncTest {
         //}
     }
 
+    @Test
+    public void 按策略分摊Test() {
+        Dataset<Row> src = spark.createDataset(ImmutableList.of(
+                RowFactory.create("2020-04-02 07:00", "主营业务收入.收入.加液", 2L),
+                RowFactory.create("2020-04-02 08:00", "主营业务收入.收入.加液", 3L),
+                RowFactory.create("2020-04-03 08:00", "主营业务收入.收入.X", 17L),
+                RowFactory.create("2020-04-05 16:00", null, 23L),
+                RowFactory.create("2020-04-06 08:00", "主营业务收入.收入.加液", 7L),
+                RowFactory.create("2020-04-06 09:00", "主营业务收入.收入.加液", 13L)
+        ), RowEncoder.apply(new StructType()
+                .add("ts", "string")
+                .add("科目", "string")
+                .add("金额", "long")));
+        Dataset<Row> df;
+
+        // 按天数
+        df = src
+                .union(spark.sql("select '2020-04-09 07:00',null,null"))
+                .withColumn("s", expr("sum(`金额`) over ()"))
+                .withColumn("ex", Func.按策略分摊1(
+                        "datediff(ts,'2020-04-01')",
+                        "`金额`",
+                        "datediff('2020-04-09','2020-04-01')",
+                        "s",
+                        "'天数'",
+                        "array(struct(0.0d k,11l a))"
+                ).over(Window.orderBy("ts", "科目")))
+                .selectExpr("explode(ex) ex")
+                .selectExpr("ex.*")
+                .cache();
+        assertEquals(8, df.count());
+        assertEquals(11L, df.agg(last("amount")).first().getLong(0));
+
+        // 按金额分
+        df = src
+                .union(spark.sql("select '2020-04-09 07:00',null,null"))
+                .withColumn("s", expr("sum(`金额`) over ()"))
+                .withColumn("ex", Func.按策略分摊1(
+                        "datediff(ts,'2020-04-01')",
+                        "`金额`",
+                        "datediff('2020-04-09','2020-04-01')",
+                        "s",
+                        "'金额'",
+                        "array(struct(0.0d k,11l a))"
+                ).over(Window.orderBy("ts", "科目")))
+                .selectExpr("explode(ex) ex")
+                .selectExpr("ex.*")
+                .cache();
+        assertEquals(8, df.count());
+        assertEquals(0, df.where("n=0").first().getLong(1));
+        assertEquals(1, df.where("n=1").first().getLong(1));
+        assertEquals(4, df.where("n=2").first().getLong(1));
+        assertEquals(4, df.where("n=3").first().getLong(1));
+        assertEquals(8, df.where("n=4").first().getLong(1));
+        assertEquals(11, df.where("n=5").first().getLong(1));
+        assertEquals(11, df.where("n=6").first().getLong(1));
+        assertEquals(11, df.where("n=7").first().getLong(1));
+
+        // 按金额分
+        df = src
+                .union(spark.sql("select '2020-04-09 07:00',null,null"))
+                .withColumn("s", expr("sum(`金额`) over ()"))
+                .withColumn("ex", Func.按策略分摊1(
+                        "datediff(ts,'2020-04-01')",
+                        "`金额`",
+                        "datediff('2020-04-09','2020-04-01')",
+                        "s",
+                        "'金额'",
+                        "array(struct(0.0d k,-11l a))"
+                ).over(Window.orderBy("ts", "科目")))
+                .selectExpr("explode(ex) ex")
+                .selectExpr("ex.*")
+                .cache();
+        assertEquals(8, df.count());
+        assertEquals(0, df.where("n=0").first().getLong(1));
+        assertEquals(-1, df.where("n=1").first().getLong(1));
+        assertEquals(-4, df.where("n=2").first().getLong(1));
+        assertEquals(-4, df.where("n=3").first().getLong(1));
+        assertEquals(-8, df.where("n=4").first().getLong(1));
+        assertEquals(-11, df.where("n=5").first().getLong(1));
+        assertEquals(-11, df.where("n=6").first().getLong(1));
+        assertEquals(-11, df.where("n=7").first().getLong(1));
+
+        // 按比例
+        df = src
+                .union(spark.sql("select '2020-04-09 07:00',null,null"))
+                .withColumn("s", expr("sum(`金额`) over ()"))
+                .withColumn("ex", Func.按策略分摊1(
+                        "datediff(ts,'2020-04-01')",
+                        "`金额`",
+                        "datediff('2020-04-09','2020-04-01')",
+                        "s",
+                        "'金额'",
+                        "array(struct(-0.4d k,0l a))"
+                ).over(Window.orderBy("ts", "科目")))
+                .selectExpr("explode(ex) ex")
+                .selectExpr("ex.*")
+                .cache();
+        assertEquals(8, df.count());
+        assertEquals(0, df.where("n=0").first().getLong(1));
+        assertEquals(-2, df.where("n=1").first().getLong(1));
+        assertEquals(-9, df.where("n=2").first().getLong(1));
+        assertEquals(-9, df.where("n=3").first().getLong(1));
+        assertEquals(-18, df.where("n=4").first().getLong(1));
+        assertEquals(-26, df.where("n=5").first().getLong(1));
+        assertEquals(-26, df.where("n=6").first().getLong(1));
+        assertEquals(-26, df.where("n=7").first().getLong(1));
+
+        // 按阶梯比例
+        df = src
+                .union(spark.sql("select '2020-04-09 07:00',null,null"))
+                .withColumn("s", expr("sum(`金额`) over ()"))
+                .withColumn("ex", Func.按策略分摊1(
+                        "datediff(ts,'2020-04-01')",
+                        "`金额`",
+                        "datediff('2020-04-09','2020-04-01')",
+                        "s",
+                        "'金额'",
+                        "array(struct(-0.4d k,0l a),struct(-0.5d k,20l a),struct(-0.6d k,45l a))"
+                ).over(Window.orderBy("ts", "科目")))
+                .selectExpr("explode(ex) ex")
+                .selectExpr("ex.*")
+                .cache();
+        assertEquals(8, df.count());
+        assertEquals(0, df.where("n=0").first().getLong(1));
+        assertEquals(-2, df.where("n=1").first().getLong(1));
+        assertEquals(-9, df.where("n=2").first().getLong(1));
+        assertEquals(-9, df.where("n=3").first().getLong(1));
+        assertEquals(-21, df.where("n=4").first().getLong(1));
+        assertEquals(-33, df.where("n=5").first().getLong(1));
+        assertEquals(-33, df.where("n=6").first().getLong(1));
+        assertEquals(-33, df.where("n=7").first().getLong(1));
+    }
+
 }
