@@ -12,6 +12,14 @@ public class Chromosome {
 	private boolean[] gene;    // 基因序列
 	private double score;    // 对应的函数得分
 
+	public double getScore() {
+		return score;
+	}
+
+	public void setScore(double score) {
+		this.score = score;
+	}
+
 	public Chromosome() {
 
 	}
