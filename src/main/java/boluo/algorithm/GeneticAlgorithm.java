@@ -49,8 +49,24 @@ public abstract class GeneticAlgorithm {
 		if (chro == null) {
 			return;
 		}
-
+		double x = changeX(chro);
+		double y = caculateY(x);
+		chro.setScore(y);
 	}
+
+	/**
+	 * @param chro
+	 * @description 将二进制转化为对应的 X
+	 */
+	public abstract double changeX(Chromosome chro);
+
+	/**
+	 * @param x
+	 * @description 根据 x 计算 y 值, Y = F(X);
+	 */
+	public abstract double caculateY(double x);
+
+
 }
 
 
