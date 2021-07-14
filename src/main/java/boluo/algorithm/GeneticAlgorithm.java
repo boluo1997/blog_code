@@ -39,7 +39,28 @@ public abstract class GeneticAlgorithm {
 	 * @description 计算种群的适应度, 最好适应度, 最坏适应度, 平均适应度等
 	 */
 	private void calculateScore() {
-
+		setChromosomeScore(population.get(0));
+		bestScore = population.get(0).getScore();
+		worstScore = population.get(0).getScore();
+		totalScore = 0;
+		for (Chromosome chro : population) {
+			setChromosomeScore(chro);
+			if (chro.getScore() > bestScore) {    // 设置最好的基因
+				bestScore = chro.getScore();
+				if (y < bestScore) {
+					x = changeX(chro);
+					y = bestScore;
+					geneI = generation;
+				}
+			}
+			if (chro.getScore() < worstScore) {    // 设置最坏基因值
+				worstScore = chro.getScore();
+			}
+			totalScore += chro.getScore();
+		}
+		averageScore = totalScore / popSize;
+		// 因为精度问题导致的平均值大于最好值, 将平均值设置成最好值
+		averageScore = averageScore > bestScore ? bestScore : averageScore;
 	}
 
 	/**
@@ -50,7 +71,7 @@ public abstract class GeneticAlgorithm {
 			return;
 		}
 		double x = changeX(chro);
-		double y = caculateY(x);
+		double y = calculateY(x);
 		chro.setScore(y);
 	}
 
@@ -64,8 +85,37 @@ public abstract class GeneticAlgorithm {
 	 * @param x
 	 * @description 根据 x 计算 y 值, Y = F(X);
 	 */
-	public abstract double caculateY(double x);
+	public abstract double calculateY(double x);
 
+	/**
+	 * @description 在计算完适应度之后, 需要使用'轮盘赌法'选取可以产生下一代的个体,
+	 * 这里有个条件就是只有个人的适应度不小于平均适应度才会产生下一代 (适者生存)
+	 */
+	private Chromosome getParentChromosome() {
+		double slice = Math.random() * totalScore;
+		double sum = 0;
+		for (Chromosome chro : population) {
+			sum += chro.getScore();
+
+			// 转到对应的位置且适应度不小于平均适应度
+			if (sum > slice && chro.getScore() >= averageScore) {
+				return chro;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * @description 选择可以产生下一代的个体之后, 交配产生下一代
+	 */
+	private void evolve() {
+		List<Chromosome> childPopulation = new ArrayList<>();
+
+		// 生成下一代种群
+		while () {
+
+		}
+	}
 
 }
 
