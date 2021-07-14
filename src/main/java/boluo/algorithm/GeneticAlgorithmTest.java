@@ -1,6 +1,6 @@
 package boluo.algorithm;
 
-public class GeneticAlgorithmTest extends GeneticAlgorithm {
+public class GeneticAlgorithmTest {
 
 }
 
