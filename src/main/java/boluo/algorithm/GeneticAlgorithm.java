@@ -9,7 +9,7 @@ public abstract class GeneticAlgorithm {
 	private int popSize = 100;    // 种群数量
 	private int geneSize;    // 基因最大长度
 	private int maxIterNum = 500;    // 最大迭代次数
-	private double nutationRate = 0.01;    // 基因变异概率
+	private double mutationRate = 0.01;    // 基因变异概率
 	private int maxMutationNum = 3;    // 最大变异步长
 
 	private int generation = 1;    // 当前遗传到第几代
@@ -22,6 +22,10 @@ public abstract class GeneticAlgorithm {
 	private double x;    // 记录历史种群中最好的x值
 	private double y;    // 记录历史种群中最好的y值
 	private int geneI;    // x,y所在代数
+
+	public GeneticAlgorithm(int geneSize) {
+		this.geneSize = geneSize;
+	}
 
 	/**
 	 * @description 初始化种群, 原始的第一代
@@ -112,9 +116,116 @@ public abstract class GeneticAlgorithm {
 		List<Chromosome> childPopulation = new ArrayList<>();
 
 		// 生成下一代种群
-		while () {
-
+		while (childPopulation.size() < popSize) {
+			Chromosome p1 = getParentChromosome();
+			Chromosome p2 = getParentChromosome();
+			List<Chromosome> children = Chromosome.genetic(p1, p2);
+			if (children != null) {
+				for (Chromosome chro : children) {
+					childPopulation.add(chro);
+				}
+			}
 		}
+
+		// 新种群替换旧种群
+		List<Chromosome> t = population;
+		population = childPopulation;
+		t.clear();
+		t = null;
+
+		// 基因突变
+		mutation();
+
+		// 计算新种群的适应度
+		calculateScore();
+	}
+
+	/**
+	 * @description 在产生下一代的过程中, 可能会发生基因突变
+	 */
+	public void mutation() {
+		for (Chromosome chro : population) {
+			if (Math.random() < mutationRate) {
+				int mutationNum = (int) (Math.random() * maxMutationNum);
+				chro.mutation(mutationNum);
+			}
+		}
+	}
+
+	/**
+	 * @description 将上述步骤一代一代的重复执行
+	 */
+	public void calculate() {
+		// 初始化种群
+		generation = 1;
+		init();
+		while (generation < maxIterNum) {
+			// 种族遗传
+			evolve();
+			print();
+			generation++;
+		}
+	}
+
+	/**
+	 * @description 输出结果
+	 */
+	private void print() {
+		System.out.println("--------------------------------");
+		System.out.println("the generation is:" + generation);
+		System.out.println("the best y is:" + bestScore);
+		System.out.println("the worst fitness is:" + worstScore);
+		System.out.println("the average fitness is:" + averageScore);
+		System.out.println("the total fitness is:" + totalScore);
+		System.out.println("geneI:" + geneI + "\tx:" + x + "\ty:" + y);
+	}
+
+	public void setPopulation(List<Chromosome> population) {
+		this.population = population;
+	}
+
+	public void setPopSize(int popSize) {
+		this.popSize = popSize;
+	}
+
+	public void setGeneSize(int geneSize) {
+		this.geneSize = geneSize;
+	}
+
+	public void setMaxIterNum(int maxIterNum) {
+		this.maxIterNum = maxIterNum;
+	}
+
+	public void setMutationRate(double mutationRate) {
+		this.mutationRate = mutationRate;
+	}
+
+	public void setMaxMutationNum(int maxMutationNum) {
+		this.maxMutationNum = maxMutationNum;
+	}
+
+	public double getBestScore() {
+		return bestScore;
+	}
+
+	public double getWorstScore() {
+		return worstScore;
+	}
+
+	public double getTotalScore() {
+		return totalScore;
+	}
+
+	public double getAverageScore() {
+		return averageScore;
+	}
+
+	public double getX() {
+		return x;
+	}
+
+	public double getY() {
+		return y;
 	}
 
 }
