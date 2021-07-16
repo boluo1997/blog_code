@@ -115,33 +115,24 @@ public class FromQingliu2 {
 			appMap.put(jn.at("/appKey").asText(), jn.at("/appName").asText());
 		}
 
+		List<Row> writeList = Lists.newArrayList();
+		Dataset<Row> writeData = createDataFrame(writeList, qingliuStruct.add("update_time", "timestamp"));
+
+		// 查询所有appId下apply_id数量和最大update_time
+		Dataset<Row> df = spark.read().format("delta").load(localQingliuPath);
+		Dataset<Row> appIdDs = df.groupBy(expr("app_id"))
+				.agg(countDistinct("apply_id").as("countApplyId"),
+						max("update_time").as("update_time"));
+
 		for (String appId : appMap.keySet()) {
 
-			Dataset<Row> df1 = spark.read().format("delta").load(localQingliuPath);
-			df1.registerTempTable("qingliu");
+			long localApplyIdCount = appIdDs.where(String.format("app_id = '%s'", appId)).count() == 0
+					? 0
+					: appIdDs.where(String.format("app_id = '%s'", appId)).first().getAs("countApplyId");
 
-			// 查询本地轻流表
-			List<Row> localApplyList;
-			if (df1.schema().isEmpty()) {
-				localApplyList = Lists.newArrayList();
-			} else {
-				String sql = "select apply_id, log_id, update_time, after\n" +
-						"from\n" +
-						"(\n" +
-						"    select apply_id, log_id, update_time, after, row_number() over(partition by apply_id order by log_id desc) rk\n" +
-						"    from qingliu\n" +
-						"    where app_id = '" + appId + "'" +
-						") t\n" +
-						"where t.rk = 1 and log_id != '" + Integer.MAX_VALUE + "'";
-				localApplyList = spark.sql(sql).collectAsList();
-			}
-
-			LocalDateTime localMaxUpdateTime = localApplyList.stream()
-					.map(i -> i.<Timestamp>getAs("update_time"))
-					.map(Timestamp::toLocalDateTime)
-					.max(LocalDateTime::compareTo)
-					.orElse(LocalDateTime.of(2016, 1, 1, 0, 0))
-					.minusHours(24);
+			LocalDateTime localMaxUpdateTime = appIdDs.where(String.format("app_id = '%s'", appId)).count() == 0
+					? LocalDateTime.of(2016, 1, 1, 0, 0)
+					: ((Timestamp) appIdDs.where(String.format("app_id = '%s'", appId)).first().getAs("update_time")).toLocalDateTime();
 
 			LocalDateTime insertUpdateTime = LocalDateTime.now();
 			String insertTimeStr = String.valueOf(insertUpdateTime.atZone(ZoneId.systemDefault()).toEpochSecond());
@@ -223,22 +214,41 @@ public class FromQingliu2 {
 				lastTime = lastTime1;
 			}
 
-			// 判断3 是否有删除的
-			// 先找出线上有的数据, 但是本地没有的applyId
-			Set<Integer> currAddApplyIdSet = Sets.difference(
-					checkAnswersMap.keySet(),
-					localApplyList.stream().map(i -> i.getAs(0)).collect(Collectors.toSet()));
+			// 判断checkAnswersMap中有没有大于等于localMaxUpdateTime的数据
+			Optional<ArrayNode> isAdd = checkAnswersMap.values().stream().filter(i -> localMaxUpdateTime.compareTo(getValue(i, "更新时间")) <= 0).findAny();
+			long addCount = 0;
 
-			Preconditions.checkArgument(localApplyList.size() + currAddApplyIdSet.size() >= applyIdCount,
+			if (isAdd.isPresent()) {
+				// 数据查询: 本地轻流表
+				Dataset<Row> localApplyIdDs = df.where(String.format("app_id = '%s'", appId))
+						.distinct()
+						.select("apply_id");
+
+				// 线上applyId
+				List<Row> onlineApplyIdList = Lists.newArrayList();
+				for (Integer applyId : checkAnswersMap.keySet()) {
+					Row row = RowFactory.create(applyId);
+					onlineApplyIdList.add(row);
+				}
+				Dataset<Row> onlineApplyIdDs = spark.createDataFrame(onlineApplyIdList, new StructType().add("apply_id", "int"));
+
+				// 找出增加的applyId数量
+				addCount = onlineApplyIdDs.except(localApplyIdDs).count();
+
+			}
+
+			// 校验: 本地 + 增加 >= 线上
+			Preconditions.checkArgument(localApplyIdCount + addCount >= applyIdCount,
 					"数据异常...appId为: " + appId +
-							", 本地数据量: " + localApplyList.size() +
-							", 增加数据量: " + currAddApplyIdSet.size() +
+							", 本地数据量: " + localApplyIdCount +
+							", 增加数据量: " + addCount +
 							", 线上总数: " + applyIdCount +
 							", checkAnswersMap数量" + checkAnswersMap.size()
 			);
 
+			// 判断是否有删除的
 			List<Row> deleteLine = Lists.newArrayList();
-			if (localApplyList.size() + currAddApplyIdSet.size() > applyIdCount) {
+			if (localApplyIdCount + addCount > applyIdCount) {
 				// 有删除的, 处理
 				ObjectNode deleteRequestBody = mapper.createObjectNode()
 						.put("pageNum", 1)
@@ -284,10 +294,20 @@ public class FromQingliu2 {
 
 				// 此时的checkAnswersMap中拥有线上全量的applyId
 				// 本地的 - 线上全部的 = 删除的
-				Stream<Row> deleteApplyId = localApplyList.stream().filter(i -> {
-					Integer k = i.getAs(0);
-					return !checkAnswersMap.containsKey(k);
-				});
+
+				// 数据查询: 本地轻流表
+				Dataset<Row> localApplyIdDs = df.where(String.format("app_id = '%s'", appId))
+						.distinct()
+						.select(expr("apply_id"));
+
+				// 线上applyId
+				List<Row> onlineApplyIdList = Lists.newArrayList();
+				for (Integer applyId : checkAnswersMap.keySet()) {
+					Row row = RowFactory.create(applyId);
+					onlineApplyIdList.add(row);
+				}
+				Dataset<Row> onlineApplyIdDs = spark.createDataFrame(onlineApplyIdList, new StructType().add("apply_id", "int"));
+				Stream<Row> deleteApplyId = localApplyIdDs.except(onlineApplyIdDs).collectAsList().stream();
 
 				deleteApplyId.forEach(i -> {
 					int applyId = i.getAs(0);
@@ -322,17 +342,7 @@ public class FromQingliu2 {
 			}
 
 			// 处理添加的
-			Map<Integer, Tuple2<Integer, ArrayNode>> beforeMap = Maps.newHashMap();
-			for (Row row : localApplyList) {
-
-				ArrayNode onlineBefore = Strings.isNullOrEmpty(row.getAs(3))
-						? mapper.createArrayNode()
-						: (ArrayNode) mapper.readTree(row.getAs(3).toString());
-
-				beforeMap.put(row.getAs(0), Tuple2.apply(row.getAs(1), onlineBefore));
-			}
-
-			List<Row> updateRowList = addQingliu(appId, appMap.get(appId), checkAnswersMap, beforeMap, webToken);
+			List<Row> updateRowList = addQingliu(appId, appMap.get(appId), checkAnswersMap, webToken);
 
 			// 过滤掉updateRowList中audit_time大于checkMaxTime的数据
 			List<Row> filterRowList = updateRowList.stream()
@@ -341,17 +351,21 @@ public class FromQingliu2 {
 					}).collect(Collectors.toList());
 
 			// 存储
-			Dataset<Row> writeData = createDataFrame(filterRowList, qingliuStruct)
+			Dataset<Row> tempWriteData = createDataFrame(filterRowList, qingliuStruct)
 					.withColumn("update_time", to_timestamp(from_unixtime(expr(insertTimeStr))));
-//			Outputs.replace(writeData, localQingliuPath,
-//					expr(String.format("t.app_id='%s' and s.apply_id=t.apply_id and s.log_id=t.log_id", appId)),
-//					"app_id");
-			SparkSession.active().sqlContext().clearCache();
+			writeData = writeData.unionAll(tempWriteData);
+
 		}
 
+//		Outputs.replace(writeData, localQingliuPath,
+//				expr("s.app_id=t.app_id and s.apply_id=t.apply_id and s.log_id=t.log_id"),
+//				"app_id");
 	}
 
 	private static Dataset<Row> createDataFrame(List<Row> rows, StructType schema) {
+		if (rows.isEmpty()) {
+			return SparkSession.active().createDataFrame(rows, schema);
+		}
 		int blockSize = 500;
 		Optional<Dataset<Row>> result = Stream.iterate(0, i -> i + blockSize)
 				.limit((rows.size() + blockSize - 1) / blockSize)
@@ -364,7 +378,7 @@ public class FromQingliu2 {
 	}
 
 	private static List<Row> addQingliu(String appId, String appName, Map<Integer, ArrayNode> checkAnswersMap,
-										Map<Integer, Tuple2<Integer, ArrayNode>> beforeMap, String webToken) throws IOException {
+										String webToken) throws IOException {
 
 		List<Row> updateRowList = Lists.newArrayList();
 		for (Integer applyId : checkAnswersMap.keySet()) {
@@ -376,42 +390,31 @@ public class FromQingliu2 {
 					null
 			);
 			ObjectNode qingliuLogIdNode = formatAuditRecord(qingliuLogIdList);
+			ArrayNode onlineBefore = mapper.createArrayNode();
 
-			boolean first = beforeMap.containsKey(applyId);
-			int localMaxLogId = first ? beforeMap.get(applyId)._1 : -1;
-			ArrayNode onlineBefore = first
-					? beforeMap.get(applyId)._2
-					: mapper.createArrayNode();
+			// 编号节点
+			List<JsonNode> noNodeList = Streams.stream(checkAnswersMap.get(applyId))
+					.filter(i -> i.at("/queId").asInt() == 0)
+					.collect(Collectors.toList());
+			Preconditions.checkArgument(noNodeList.size() > 0, "该数据无编号节点, appId为: " + appId + ", applyId为: " + applyId);
+			JsonNode noNode = noNodeList.get(0);
+			onlineBefore.add(noNode);
 
-			if (!first) {
-
-				// 编号节点
-				List<JsonNode> noNodeList = Streams.stream(checkAnswersMap.get(applyId))
-						.filter(i -> i.at("/queId").asInt() == 0)
-						.collect(Collectors.toList());
-				Preconditions.checkArgument(noNodeList.size() > 0, "该数据无编号节点, appId为: " + appId + ", applyId为: " + applyId);
-				JsonNode noNode = noNodeList.get(0);
-				onlineBefore.add(noNode);
-
-				// 申请人节点
-				if (!qingliuLogIdNode.at("/result/auditRecords/0/auditUser").isNull()
-						&& !Strings.isNullOrEmpty(qingliuLogIdNode.at("/result/auditRecords/0/auditUser/nickName").asText())
-						&& !qingliuLogIdNode.at("/result/auditRecords/0/auditUser/nickName").asText().equals("null")) {
-					ObjectNode auditUserNode = (ObjectNode) qingliuLogIdNode.at("/result/auditRecords/0/auditUser");
-					ObjectNode formatUserNode = formatUserNode(auditUserNode);
-					onlineBefore.add(formatUserNode);
-				}
+			// 申请人节点
+			if (!qingliuLogIdNode.at("/result/auditRecords/0/auditUser").isNull()
+					&& !Strings.isNullOrEmpty(qingliuLogIdNode.at("/result/auditRecords/0/auditUser/nickName").asText())
+					&& !qingliuLogIdNode.at("/result/auditRecords/0/auditUser/nickName").asText().equals("null")) {
+				ObjectNode auditUserNode = (ObjectNode) qingliuLogIdNode.at("/result/auditRecords/0/auditUser");
+				ObjectNode formatUserNode = formatUserNode(auditUserNode);
+				onlineBefore.add(formatUserNode);
 			}
 
-			// 存放添加的logId对应的节点, 也就是online接口返回的整个结果
+			// 存放logId对应的节点, 也就是online接口返回的整个结果
 			List<JsonNode> updateLogIdList = Lists.newArrayList();
 
 			// 获取qingliuLogIdList中所有的qingliuLogId
 			for (JsonNode jn : qingliuLogIdNode.at("/result/auditRecords")) {
-				int qingliuLogId = jn.at("/auditRcdId").asInt();
-				if (qingliuLogId > localMaxLogId) {
-					updateLogIdList.add(jn);
-				}
+				updateLogIdList.add(jn);
 			}
 
 			List<Row> tempUpdateRowList = Lists.newArrayList();
