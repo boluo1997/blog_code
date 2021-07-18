@@ -328,5 +328,101 @@ public class Func {
                 expr(sumIncome), expr(shareMethod), expr(rate));
     }
 
+    public static Column 按策略分摊2(String dAmount, String item) {
+        return new UserDefinedAggregateFunction() {
+
+            private static final int IDX_INPUT_AMOUNT = 0;
+            private static final int IDX_INPUT_ITEM = 1;
+
+            private static final int IDX_BUFFER_PREVAMOUNT1 = 0;
+            private static final int IDX_BUFFER_PREVAMOUNT2 = 1;
+            private static final int IDX_BUFFER_CURRAMOUNT1 = 2;
+            private static final int IDX_BUFFER_CURRAMOUNT2 = 3;
+
+            @Override
+            public StructType inputSchema() {
+                return new StructType()
+                        .add("dAmount", "long")
+                        .add("项", "int")
+                        ;
+            }
+
+            @Override
+            public StructType bufferSchema() {
+
+                return new StructType()
+                        .add("prevItemAmount1", "long")    // 上一天累计的项1的amount
+                        .add("prevItemAmount2", "long")    // 上一天累计的项2的amount
+                        .add("currAmount1", "long")        // 当天累计的项1的amount
+                        .add("currAmount2", "long")        // 当天累计的项2的amount
+                        ;
+            }
+
+            @Override
+            public DataType dataType() {
+                return LongType$.MODULE$;
+            }
+
+            @Override
+            public boolean deterministic() {
+                return false;
+            }
+
+            @Override
+            public void initialize(MutableAggregationBuffer buffer) {
+                buffer.update(0, 0L);
+                buffer.update(1, 0L);
+                buffer.update(2, 0L);
+                buffer.update(3, 0L);
+            }
+
+            @Override
+            public void update(MutableAggregationBuffer buffer, Row input) {
+                long dAmount = input.getAs(IDX_INPUT_AMOUNT);
+                int item = input.getAs(IDX_INPUT_ITEM);
+
+                // 项1是固定, 项2是比例
+                long currItemAmount1 = buffer.getAs(IDX_BUFFER_CURRAMOUNT1);
+                long currItemAmount2 = buffer.getAs(IDX_BUFFER_CURRAMOUNT2);
+
+                long updateItemAmount1 = currItemAmount1;
+                long updateItemAmount2 = currItemAmount2;
+                // 用input计算当天的itemAmount1和2
+                switch (item) {
+                case 1:
+                    updateItemAmount1 += dAmount;
+                    break;
+                case 2:
+                    updateItemAmount2 += dAmount;
+                    break;
+                default:
+                    throw new UnsupportedOperationException("未知的项!");
+                }
+
+                buffer.update(0, currItemAmount1);
+                buffer.update(1, currItemAmount2);
+                buffer.update(2, updateItemAmount1);
+                buffer.update(3, updateItemAmount2);
+            }
+
+            @Override
+            public void merge(MutableAggregationBuffer buffer1, Row buffer2) {
+
+            }
+
+            @Override
+            public Object evaluate(Row buffer) {
+
+                long prevItemAmount1 = buffer.getAs(IDX_BUFFER_PREVAMOUNT1);
+                long prevItemAmount2 = buffer.getAs(IDX_BUFFER_PREVAMOUNT2);
+                long currItemAmount1 = buffer.getAs(IDX_BUFFER_CURRAMOUNT1);
+                long currItemAmount2 = buffer.getAs(IDX_BUFFER_CURRAMOUNT2);
+
+                return Math.min(currItemAmount1, currItemAmount2) - Math.min(prevItemAmount1, prevItemAmount2);
+            }
+
+        }.apply(expr(dAmount), expr(item));
+    }
+
 }
 
