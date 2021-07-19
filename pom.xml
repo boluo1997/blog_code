@@ -115,10 +115,11 @@
             <version>2.6</version>
         </dependency>
 
+        <!-- 1.13.1 -->
         <dependency>
             <groupId>org.jsoup</groupId>
             <artifactId>jsoup</artifactId>
-            <version>1.10.3</version>
+            <version>1.13.1</version>
         </dependency>
 
         <dependency>
