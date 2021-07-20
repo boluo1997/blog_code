@@ -1,6 +1,6 @@
 package boluo.basics;
 
-import com.clearspring.analytics.util.Lists;
+import com.google.common.collect.Lists;
 import org.junit.Test;
 
 import java.util.Arrays;
