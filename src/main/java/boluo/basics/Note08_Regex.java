@@ -15,7 +15,7 @@ import static org.junit.Assert.assertEquals;
 public class Note08_Regex {
 
     @Test
-    public void func10() {
+    public void func1() {
         // 正则匹配
         // 1.按行对数据分割
         String str1 = "0" + "\n\n\n" + "123\n" + "456\n" + "\n" + "789";
@@ -41,4 +41,23 @@ public class Note08_Regex {
         String str = String.format("%03d", 10);
         System.out.println(str);
     }
+
+    @Test
+	public void func2() {
+    	String str = "part1" +
+				"截止2020-08-31，每年费用50400.00元。（洗烘设备数量24台+12台=36台）\n" +
+				"part2" +
+				"截止2021-02-28，每年费用54600.00元。（洗烘设备数量26台+13台=39台）\n" +
+				"part3" +
+				"截止2021-05-31，每年费用61600.00元。（洗烘设备数量29台+15台=44台）";
+
+		Pattern pattern = Pattern.compile("截止\\d{4}-\\d{2}-\\d{2}，每年费用([\\d\\.]+)元.*");
+		Matcher matcher = pattern.matcher(str);
+		for (int i = 0; i < 10; i++) {
+			if (matcher.find()) {
+				System.out.println(matcher.start());
+			}
+		}
+
+	}
 }
