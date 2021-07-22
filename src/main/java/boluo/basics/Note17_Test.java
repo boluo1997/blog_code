@@ -5,6 +5,7 @@ import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -22,11 +23,20 @@ public class Note17_Test {
                 "截止2021-05-31，每年费用61600.00元。（洗烘设备数量29台+15台=44台）";
 
         Pattern pattern = Pattern.compile("截止\\d{4}-\\d{2}-\\d{2}，每年费用([\\d\\.]+)元.*");
+        Matcher matcher = pattern.matcher(str);
         List<String> result = new ArrayList<>();
 
         // 切割成   ***截止**, 截止**, 截止**, "" 四段
         // TODO 把切割后的字符串放入result
-
+        for (int position = 0; ; ) {
+            if (matcher.find()) {
+                result.add(str.substring(position, matcher.end()));
+                position = matcher.end();
+            } else {
+                result.add(str.substring(position));
+                break;
+            }
+        }
 
         result = result.stream().map(i -> i.replace("\n", "")).collect(Collectors.toList());
         Assert.assertFalse(result.isEmpty());
