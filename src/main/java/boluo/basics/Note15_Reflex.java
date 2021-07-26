@@ -31,7 +31,7 @@ public class Note15_Reflex {
 		int[] nums = {59, 27, 63, 45, 99, 1, 72, 13};
 
 		Method bubbleSort = BubbleSort.class.getDeclaredMethod("bubbleSort", int[].class);
-		// 解除私有限定
+		// 解除私有限定, 访问private修饰的方法
 		bubbleSort.setAccessible(true);
 		bubbleSort.invoke(null, nums);
 		for (int i : nums) {
