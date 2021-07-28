@@ -5,7 +5,7 @@ import java.util.Hashtable;
 /**
  * 动态规划
  */
-public class dynamicProgramming {
+public class DynamicProgramming {
 
     // 用一个哈希表记录下从i开始的最长子序列长度
     static Hashtable<Integer, Integer> memo = new Hashtable<>();
