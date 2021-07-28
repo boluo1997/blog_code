@@ -124,15 +124,19 @@ public class FromQingliu2 {
 				.agg(countDistinct("apply_id").as("countApplyId"),
 						max("update_time").as("update_time"));
 
+		Map<String, Row> appIdMap = appIdDs.collectAsList()
+				.stream()
+				.collect(Collectors.toMap(i -> i.getAs("app_id"), j -> j));
+
 		for (String appId : appMap.keySet()) {
 
-			long localApplyIdCount = appIdDs.where(String.format("app_id = '%s'", appId)).count() == 0
-					? 0
-					: appIdDs.where(String.format("app_id = '%s'", appId)).first().getAs("countApplyId");
+			long localApplyIdCount = appIdMap.containsKey(appId)
+					? appIdMap.get(appId).getAs("countApplyId")
+					: 0;
 
-			LocalDateTime localMaxUpdateTime = appIdDs.where(String.format("app_id = '%s'", appId)).count() == 0
-					? LocalDateTime.of(2016, 1, 1, 0, 0)
-					: ((Timestamp) appIdDs.where(String.format("app_id = '%s'", appId)).first().getAs("update_time")).toLocalDateTime();
+			LocalDateTime localMaxUpdateTime = appIdMap.containsKey(appId)
+					? appIdMap.get(appId).<Timestamp>getAs("updateTime").toLocalDateTime()
+					: LocalDateTime.of(2016, 1, 1, 0, 0);
 
 			LocalDateTime insertUpdateTime = LocalDateTime.now();
 			String insertTimeStr = String.valueOf(insertUpdateTime.atZone(ZoneId.systemDefault()).toEpochSecond());
