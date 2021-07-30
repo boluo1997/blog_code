@@ -3,10 +3,14 @@ package boluo.basics;
 import com.google.common.base.CharMatcher;
 import com.google.common.base.Joiner;
 import com.google.common.base.Splitter;
+import com.google.common.collect.HashMultiset;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Multiset;
 import com.google.common.primitives.Ints;
 import org.junit.Test;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public class Note18_Guava {
@@ -61,6 +65,63 @@ public class Note18_Guava {
 
 		// 集合到数组的转换
 		int[] toArray = Ints.toArray(list);
+
+	}
+
+	@Test
+	public void func4() {
+
+		// 对JDK集合的有效补充 Multiset(无序的, 但是可以重复的集合)
+		Multiset<String> multiset = HashMultiset.create();
+		multiset.add("a");
+		multiset.add("a");
+		multiset.add("b");
+		multiset.add("c");
+		multiset.add("b");
+
+		System.out.println(multiset.size());
+		// Multiset自带功能, 可以跟踪每个对象的数量
+		System.out.println(multiset.count("a"));
+
+	}
+
+	@Test
+	public void func5() {
+
+		// List的不可变性设置
+		List<String> list = new ArrayList<>();
+		list.add("a");
+		list.add("b");
+
+		// 这种视图不够安全, 不是真正意义上的快照
+		List<String> readOnlyList = Collections.unmodifiableList(list);
+
+		// readOnlyList.add("c"); java.long.UnsupportedOperationException
+		list.add("c");
+
+		System.out.println(readOnlyList);
+
+		// 实际上, Collections.unmodifiableXxx所返回的集合和源集合是同一个对象, 只不过可以对集合做出改变的API都被重写,
+		// 会抛出UnsupportedOperationException
+		// 也就是说我们改变源集合, 会导致不可变视图(unmodifiable View)也会发生变化
+	}
+
+	@Test
+	public void func6() {
+
+		// 在不使用guava的情况下, 避免上面的问题
+		List<String> list = new ArrayList<>();
+		list.add("a");
+		list.add("b");
+
+		// Defensive Copy, 保护性拷贝
+		List<String> readOblyList = Collections.unmodifiableList(new ArrayList<String>(list));
+
+	}
+
+	@Test
+	public void func7() {
+		// 为了改进unmodifiable, guava提出了Immutable的概念
 
 	}
 
