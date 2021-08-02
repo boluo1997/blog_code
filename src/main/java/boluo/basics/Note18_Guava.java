@@ -3,9 +3,7 @@ package boluo.basics;
 import com.google.common.base.CharMatcher;
 import com.google.common.base.Joiner;
 import com.google.common.base.Splitter;
-import com.google.common.collect.HashMultiset;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Multiset;
+import com.google.common.collect.*;
 import com.google.common.primitives.Ints;
 import org.junit.Test;
 
@@ -122,7 +120,47 @@ public class Note18_Guava {
 	@Test
 	public void func7() {
 		// 为了改进unmodifiable, guava提出了Immutable的概念
+		List<String> immutable = ImmutableList.of("a", "b", "c");
+		// immutable.add("d");		// java.lang.UnsupportedOperationException
 
+		List<String> list = new ArrayList<>();
+		list.add("a");
+		List<String> immutable2 = ImmutableList.copyOf(list);
+		list.add("d");
+
+		// 视图不随着源而改变
+		System.out.println("list size : " + list.size() + ", immutable.size : " + immutable2.size());
+	}
+
+	@Test
+	public void func8() {
+		// 一对多数据结构
+		// JDK中的map是一对一结构的, 如果需要一对多结构的, 往往表达成: Map<key, List>, 比较臃肿
+		// guava中使用 Multimap
+
+		// guava中所有的集合都具有create方法
+		Multimap<String, String> multimap = ArrayListMultimap.create();
+		multimap.put("boluo", "1");
+		multimap.put("boluo", "2");
+		multimap.put("dingc", "1");
+
+		System.out.println(multimap.get("boluo"));    // collection
+	}
+
+	@Test
+	public void func9() {
+		// 双向Map : BiMap
+		BiMap<String, String> biMap = HashBiMap.create();
+		biMap.put("name", "dingc");
+
+		// value重复会报错,
+		// biMap.put("nick", "dingc");
+
+		// 强制覆盖
+		biMap.forcePut("nick", "dingc");
+		biMap.put("gender", "man");
+
+		System.out.println(biMap.inverse().get("man"));
 	}
 
 }
