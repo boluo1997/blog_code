@@ -2,6 +2,7 @@ package boluo.basics;
 
 import com.google.common.base.CharMatcher;
 import com.google.common.base.Joiner;
+import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.common.collect.*;
 import com.google.common.primitives.Ints;
@@ -10,6 +11,7 @@ import org.junit.Test;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
 public class Note18_Guava {
 
@@ -159,8 +161,41 @@ public class Note18_Guava {
 		// 强制覆盖
 		biMap.forcePut("nick", "dingc");
 		biMap.put("gender", "man");
-
 		System.out.println(biMap.inverse().get("man"));
+
+		// BiMap内部维护了两个map
+		Preconditions.checkArgument(biMap.inverse().inverse() == biMap, "");
+	}
+
+	@Test
+	public void func10() {
+		// 多个key: Table, 类似于Map<k1, Map<k2, v2>>
+		Table<String, String, Integer> table = HashBasedTable.create();
+		table.put("dingc", "语文", 80);
+		table.put("dingc", "数学", 90);
+		table.put("qidai", "语文", 80);
+		table.put("qidai", "数学", 90);
+		table.put("boluo", "英语", 80);
+
+		// 最小单位: cell
+		Set<Table.Cell<String, String, Integer>> set = table.cellSet();
+		for (Table.Cell cell : set) {
+			System.out.println(cell.getRowKey() + ", " + cell.getColumnKey() + ", " + cell.getValue());
+		}
+
+		// row set
+		Set<String> rowSet = table.rowKeySet();
+		System.out.println(rowSet);
+
+		// column set
+		Set<String> columnSet = table.columnKeySet();
+		System.out.println(columnSet);
+
+		// 根据rowKey获得信息Map<column, value>	{语文=80, 数学=90}
+		System.out.println(table.row("dingc"));
+
+		// 根据column获得信息Map<row, key>
+		System.out.println(table.column("语文"));
 	}
 
 }
