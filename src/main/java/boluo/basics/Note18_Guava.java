@@ -1,17 +1,12 @@
 package boluo.basics;
 
-import com.google.common.base.CharMatcher;
-import com.google.common.base.Joiner;
-import com.google.common.base.Preconditions;
-import com.google.common.base.Splitter;
+import com.google.common.base.*;
 import com.google.common.collect.*;
 import com.google.common.primitives.Ints;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.Test;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 public class Note18_Guava {
 
@@ -198,7 +193,37 @@ public class Note18_Guava {
 		System.out.println(table.column("语文"));
 	}
 
+	@Test
+	public void func11() {
+		// 函数式编程 Functions
+		List<String> list = Lists.newArrayList("dingc", "hello", "world");
+
+		Function<String, String> f1 = new Function<String, String>() {
+			@Override
+			public @Nullable String apply(@Nullable String s) {
+				return s.length() < 6 ? s : s.substring(0, 5);
+			}
+		};
+
+		Function<String, String> f2 = new Function<String, String>() {
+			@Override
+			public @Nullable String apply(@Nullable String s) {
+				return s.toUpperCase();
+			}
+		};
+
+		Function<String, String> f3 = Functions.compose(f1, f2);
+
+		Collection<String> collection = Collections2.transform(list, f3);
+		collection.forEach(System.out::println);
+	}
+
+
 }
+
+
+
+
 
 
 
