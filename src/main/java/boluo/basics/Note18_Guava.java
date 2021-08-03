@@ -218,6 +218,11 @@ public class Note18_Guava {
 		collection.forEach(System.out::println);
 	}
 
+	@Test
+	public void func12() {
+		// Predicate
+
+	}
 
 }
 
