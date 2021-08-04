@@ -289,6 +289,9 @@ public class Note18_Guava {
 	public void func14() {
 		// Cache is King
 		// 不想使用第三方缓存组件(如redis)的时候, 可以使用guava提供的本地缓存
+		User user = new User();
+		user.setName("dingc");
+		user.setAge(18);
 
 	}
 
