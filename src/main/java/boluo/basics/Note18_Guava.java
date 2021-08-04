@@ -1,12 +1,19 @@
 package boluo.basics;
 
 import com.google.common.base.*;
+import com.google.common.base.Optional;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 import com.google.common.collect.*;
 import com.google.common.primitives.Ints;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.Test;
+import boluo.model.User;
 
+import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 public class Note18_Guava {
 
@@ -19,6 +26,30 @@ public class Note18_Guava {
 	// 字符串匹配器
 	private static final CharMatcher charMatcherDigit = CharMatcher.digit();
 	private static final CharMatcher charMatcherAny = CharMatcher.any();
+
+	// 定义缓存的实现
+	private static final CacheLoader<Long, User> userCacheLoader = new CacheLoader<Long, User>() {
+		@Override
+		public User load(Long aLong) throws Exception {
+
+			// 模拟从数据库/Redis/缓存中加载数据
+			User user = new User();
+			user.setUserId(aLong);
+			user.setName(Thread.currentThread().getName() + "-" +
+					new SimpleDateFormat("yyyy-MM-dd hh:mm:ss").format(new Date()) + "-" + aLong);
+
+			System.out.println("load: " + user);
+			return user;
+		}
+	};
+
+	// 定义缓存的策略, 提供对外访问缓存
+	private static final LoadingCache<Long, User> userCacheDate = CacheBuilder.newBuilder()
+			.expireAfterAccess(2, TimeUnit.SECONDS)
+			.expireAfterWrite(2, TimeUnit.SECONDS)
+			.refreshAfterWrite(3, TimeUnit.SECONDS)
+			.maximumSize(10000L)
+			.build(userCacheLoader);
 
 	@Test
 	public void func1() {
@@ -220,7 +251,47 @@ public class Note18_Guava {
 
 	@Test
 	public void func12() {
-		// Predicate
+		// Predicate, 最常用的功能就是运用在集合的过滤当中
+		List<String> list = Lists.newArrayList("dingc", "hello", "world");
+
+		Collection<String> collection = Collections2.filter(list, new Predicate<String>() {
+			@Override
+			public boolean apply(@Nullable String s) {
+				// 业务逻辑
+				return new StringBuilder(s).reverse().toString().equals(s);
+			}
+		});
+
+		collection.forEach(System.out::println);
+	}
+
+	@Test
+	public void func13() {
+		// check null and other : Optional 、Preconditions
+
+		String name = "name";
+		int age = 20;
+		Preconditions.checkNotNull(name, "name must be given");
+		Preconditions.checkArgument(age > 18, "the game you can't play it, you age is under 18!");
+
+		Map<String, String> defaultExtInfo = Maps.newHashMap();
+		defaultExtInfo.put("sex", "man");
+
+		Map<String, String> extInfo = Maps.newHashMap();
+		extInfo = Optional.fromNullable(extInfo).or(defaultExtInfo);
+
+		for (Map.Entry<String, String> entry : extInfo.entrySet()) {
+			System.out.println(entry.getKey() + ":" + entry.getValue());
+		}
+	}
+
+	@Test
+	public void func14() {
+		// Cache is King
+		// 不想使用第三方缓存组件(如redis)的时候, 可以使用guava提供的本地缓存
+		User user = new User();
+		user.setName("dingc");
+		user.setAge(18);
 
 	}
 
