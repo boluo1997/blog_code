@@ -13,6 +13,7 @@ import boluo.model.User;
 
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 public class Note18_Guava {
@@ -286,13 +287,14 @@ public class Note18_Guava {
 	}
 
 	@Test
-	public void func14() {
+	public void func14() throws ExecutionException {
 		// Cache is King
 		// 不想使用第三方缓存组件(如redis)的时候, 可以使用guava提供的本地缓存
 		User user = new User();
+		user.setUserId(0);
 		user.setName("dingc");
-		user.setAge(18);
-
+		userCacheDate.put(0L, user);
+		System.out.println(userCacheDate.get(0L));
 	}
 
 }
