@@ -2,6 +2,7 @@ package boluo.basics;
 
 import com.google.common.base.*;
 import com.google.common.base.Optional;
+import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
@@ -295,6 +296,65 @@ public class Note18_Guava {
 		user.setName("dingc");
 		userCacheDate.put(0L, user);
 		System.out.println(userCacheDate.get(0L));
+	}
+
+	@Test
+	public void func15() throws ExecutionException {
+
+		// guava缓存测试
+		CacheLoader<String, String> loader = new CacheLoader<String, String>() {
+			@Override
+			public String load(String key) throws Exception {
+				Thread.sleep(1000);    // 休眠1s, 模拟加载数据
+				System.out.println(key + " is loaded from a cacheLoader!");
+				return key + "'s value";
+			}
+		};
+
+		LoadingCache<String, String> loadingCache = CacheBuilder.newBuilder()
+				.maximumSize(3)        // 最大存储, 超过将把之前的缓存删掉
+				.build(loader);        // 在构建时指定自动加载器
+
+		loadingCache.get("key1");
+		loadingCache.get("key2");
+
+		LoadingCache<String, String> apiValidRulecache = CacheBuilder.newBuilder()
+				.initialCapacity(10)
+				.expireAfterWrite(10, TimeUnit.MINUTES)
+				.build(new CacheLoader<String, String>() {
+					@Override
+					public String load(String key) throws Exception {
+						Thread.sleep(1000); //休眠1s，模拟加载数据
+						System.out.println(key + " is loaded from a cacheLoader!");
+						return key + "'s value";
+					}
+				});
+
+		apiValidRulecache.get("key3");
+		apiValidRulecache.get("key4");
+		apiValidRulecache.get("key3");
+		System.out.println(apiValidRulecache.get("key1"));
+		System.out.println(apiValidRulecache.get("key2"));
+		System.out.println(apiValidRulecache.get("key3"));
+		System.out.println(apiValidRulecache.get("key4"));
+
+		Cache<String,String> cache = CacheBuilder.newBuilder()
+				.maximumSize(3)
+				.recordStats() //开启统计信息开关
+				.build();
+		cache.put("key1","value1");
+		cache.put("key2","value2");
+		cache.put("key3","value3");
+		cache.put("key4","value4");
+
+		cache.getIfPresent("key1");
+		cache.getIfPresent("key2");
+		cache.getIfPresent("key3");
+		cache.getIfPresent("key4");
+		cache.getIfPresent("key5");
+		cache.getIfPresent("key6");
+
+		System.out.println(cache.stats()); //获取统计信息
 	}
 
 }
