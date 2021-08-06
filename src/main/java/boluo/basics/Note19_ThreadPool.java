@@ -8,6 +8,9 @@ public class Note19_ThreadPool {
 	// 定长线程池, 每提交一个任务就创建一个线程, 直到达到线程池的最大数量, 这时线程数量不再变化, 当线程发生错误结束时, 线程池会补充一个新的线程
 	static ExecutorService fixedExecutor = Executors.newFixedThreadPool(3);
 
+	// 可缓存的线程池, 如果线程池的容量超过了任务数, 自动回收空闲线程, 任务增加时可以自动添加新线程, 线程池的容量不限制
+	static ExecutorService cachedExecutor = Executors.newCachedThreadPool();
+
 	public static void main(String[] args) {
 		testFixedExecutor();
 	}
@@ -38,5 +41,7 @@ public class Note19_ThreadPool {
 
 		fixedExecutor.shutdown();
 	}
+
+	//
 
 }
