@@ -19,7 +19,8 @@ public class Note19_ThreadPool {
 	public static void main(String[] args) {
 		// testFixedExecutor();
 		// testCacheExecutor();
-		testScheduledExecutor();
+		// testScheduledExecutor();
+		testSingleScheduleExecutor();
 	}
 
 	// 测试定长线程池, 线程池容量为3, 提交6个任务, 可以看出是先执行前3个任务, 前3个任务结束后再执行后面的任务
@@ -101,6 +102,33 @@ public class Note19_ThreadPool {
 		scheduledExecutor.shutdown();
 	}
 
+	// 测试单线程的线程池
+	private static void testSingleScheduleExecutor() {
+		for (int i = 0; i < 3; i++) {
+			final int index = i;
+
+			singleExecutor.execute(new Runnable() {
+				@Override
+				public void run() {
+					try {
+						Thread.sleep(3000);
+					} catch (InterruptedException e) {
+						e.printStackTrace();
+					}
+					System.out.println(Thread.currentThread().getName() + " index: " + index);
+				}
+			});
+		}
+
+		try {
+			Thread.sleep(4000);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+		System.out.println("4秒后...");
+
+		singleExecutor.shutdown();
+	}
 
 }
 
