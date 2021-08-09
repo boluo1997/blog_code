@@ -1,7 +1,6 @@
 package boluo.basics;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
 
 public class Note19_ThreadPool {
 
@@ -11,9 +10,17 @@ public class Note19_ThreadPool {
 	// 可缓存的线程池, 如果线程池的容量超过了任务数, 自动回收空闲线程, 任务增加时可以自动添加新线程, 线程池的容量不限制
 	static ExecutorService cachedExecutor = Executors.newCachedThreadPool();
 
+	// 定时线程池(周期性线程池), 可以执行周期性的任务
+	static ScheduledExecutorService scheduledExecutor = Executors.newScheduledThreadPool(2);
+
+	// 单线程池, 单线程的线程池, 线程异常结束, 会创建一个新的线程, 能确保任务按提交顺序执行
+	static ExecutorService singleExecutor = Executors.newSingleThreadExecutor();
+
 	public static void main(String[] args) {
-		testFixedExecutor();
-		testCacheExecutor();
+		// testFixedExecutor();
+		// testCacheExecutor();
+		// testScheduledExecutor();
+		testSingleScheduleExecutor();
 	}
 
 	// 测试定长线程池, 线程池容量为3, 提交6个任务, 可以看出是先执行前3个任务, 前3个任务结束后再执行后面的任务
@@ -55,13 +62,73 @@ public class Note19_ThreadPool {
 					} catch (InterruptedException e) {
 						e.printStackTrace();
 					}
-
-
+					System.out.println(Thread.currentThread().getName() + " index: " + index);
 				}
 			});
 		}
+
+		try {
+			Thread.sleep(4000);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+		System.out.println("4秒后...");
+
+		cachedExecutor.shutdown();
 	}
 
+	// 测试定长, 可周期执行的线程池
+	private static void testScheduledExecutor() {
+		for (int i = 0; i < 3; i++) {
+			final int index = i;
+
+			// scheduleWithFixedDelay 固定的延迟时间执行任务
+			// scheduleAtFixedRate 固定的频率执行任务
+			scheduledExecutor.scheduleWithFixedDelay(new Runnable() {
+				@Override
+				public void run() {
+					System.out.println(Thread.currentThread().getName() + " index: " + index);
+				}
+			}, 0, 2, TimeUnit.SECONDS);
+		}
+
+		try {
+			Thread.sleep(4000);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+		System.out.println("4秒后...");
+
+		scheduledExecutor.shutdown();
+	}
+
+	// 测试单线程的线程池
+	private static void testSingleScheduleExecutor() {
+		for (int i = 0; i < 3; i++) {
+			final int index = i;
+
+			singleExecutor.execute(new Runnable() {
+				@Override
+				public void run() {
+					try {
+						Thread.sleep(3000);
+					} catch (InterruptedException e) {
+						e.printStackTrace();
+					}
+					System.out.println(Thread.currentThread().getName() + " index: " + index);
+				}
+			});
+		}
+
+		try {
+			Thread.sleep(4000);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+		System.out.println("4秒后...");
+
+		singleExecutor.shutdown();
+	}
 
 }
 
