@@ -1,9 +1,6 @@
 package boluo.basics;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 public class Note19_ThreadPool {
 
@@ -15,6 +12,9 @@ public class Note19_ThreadPool {
 
 	// 定时线程池(周期性线程池), 可以执行周期性的任务
 	static ScheduledExecutorService scheduledExecutor = Executors.newScheduledThreadPool(2);
+
+	// 单线程池, 单线程的线程池, 线程异常结束, 会创建一个新的线程, 能确保任务按提交顺序执行
+	static ExecutorService singleExecutor = Executors.newSingleThreadExecutor();
 
 	public static void main(String[] args) {
 		// testFixedExecutor();
