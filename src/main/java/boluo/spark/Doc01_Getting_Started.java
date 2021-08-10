@@ -2,6 +2,7 @@ package boluo.spark;
 
 import boluo.model.Person;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.MapFunction;
 import org.apache.spark.sql.*;
 import org.apache.spark.sql.types.DataTypes;
@@ -125,6 +126,11 @@ public class Doc01_Getting_Started {
 		StructType schema = DataTypes.createStructType(fields);
 
 		// Convert records of the RDD (people) to Rows
+		JavaRDD<Row> rowRDD = peopleRDD_.map((Function<String, Row>) record -> {
+			String[] attributes = record.split(",");
+			return RowFactory.create(attributes[0], attributes[1].trim());
+		});
+
 
 	}
 
