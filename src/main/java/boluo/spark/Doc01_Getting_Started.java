@@ -4,9 +4,14 @@ import boluo.model.Person;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.function.MapFunction;
 import org.apache.spark.sql.*;
+import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.StructField;
+import org.apache.spark.sql.types.StructType;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 
 public class Doc01_Getting_Started {
 	public static void main(String[] args) {
@@ -104,6 +109,22 @@ public class Doc01_Getting_Started {
 		 * 3. Apply the schema to the RDD of Rows via createDataFrame method provided by SparkSession.
 		 */
 
+		JavaRDD<String> peopleRDD_ = spark.sparkContext()
+				.textFile("examples/src/main/resources/people.txt", 1)
+				.toJavaRDD();
+
+		// The schema is encoded in a string
+		String schemaString = "name age";
+
+		// Generate the schema based on the string of schema
+		List<StructField> fields = new ArrayList<>();
+		for (String fieldName : schemaString.split(" ")) {
+			StructField field = DataTypes.createStructField(fieldName, DataTypes.StringType, true);
+			fields.add(field);
+		}
+		StructType schema = DataTypes.createStructType(fields);
+
+		// Convert records of the RDD (people) to Rows
 
 	}
 
