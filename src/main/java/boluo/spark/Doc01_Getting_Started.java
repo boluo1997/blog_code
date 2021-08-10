@@ -131,6 +131,8 @@ public class Doc01_Getting_Started {
 			return RowFactory.create(attributes[0], attributes[1].trim());
 		});
 
+		// Apply the schema to the RDD
+		Dataset<Row> results ;
 
 	}
 
