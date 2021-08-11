@@ -132,7 +132,15 @@ public class Doc01_Getting_Started {
 		});
 
 		// Apply the schema to the RDD
-		Dataset<Row> results ;
+		Dataset<Row> peopleDataFrame = spark.createDataFrame(rowRDD, schema);
+
+		// Create a temporary view using the DataFrame
+		peopleDataFrame.createOrReplaceTempView("people");
+
+		// SQL can be run over a temporary view created using DataFrames
+		Dataset<Row> results = spark.sql("SELECT name FROM people");
+
+
 
 	}
 
