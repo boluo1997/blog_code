@@ -140,8 +140,11 @@ public class Doc01_Getting_Started {
 		// SQL can be run over a temporary view created using DataFrames
 		Dataset<Row> results = spark.sql("SELECT name FROM people");
 
-
-
+		Dataset<String> nameDs = results.map(
+				(MapFunction<Row, String>) row -> "Name: " + row.getString(0),
+				Encoders.STRING()
+		);
+		nameDs.show();
 	}
 
 
