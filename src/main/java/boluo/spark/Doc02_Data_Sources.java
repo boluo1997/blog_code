@@ -46,7 +46,22 @@ public class Doc02_Data_Sources {
 				spark.sql("select * from parquet.`examples/src/main/resources/people.parquet`");
 		sqlDs.show(false);
 
+		// 目前在使用 bucketBy 的时候，必须和 sortBy，saveAsTable 一起使用
+		peopleDs.write()
+				.bucketBy(42, "name")
+				.sortBy("age")
+				.mode("ignore")
+				.saveAsTable("people_bucketed");
 
+		peopleDs.write()
+				.partitionBy("favorite_color")
+				.format("parquet")
+				.save("examples/src/main/resources/people.parquet");
+
+		peopleDs.write()
+				.partitionBy("favorite_color")
+				.bucketBy(42, "name")
+				.saveAsTable("users_partitioned_bucketed");
 	}
 
 
