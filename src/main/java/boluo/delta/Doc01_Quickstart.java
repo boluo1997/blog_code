@@ -21,4 +21,12 @@ public class Doc01_Quickstart {
 				.mode("overwrite")
 				.save("./examples/delta-table");
 	}
+
+	@Test
+	public void func1() {
+		Dataset<Row> ds = SparkSession.active().read().format("delta").load("./examples/delta-table");
+		ds.show(false);
+		System.out.println("---");
+	}
+
 }
