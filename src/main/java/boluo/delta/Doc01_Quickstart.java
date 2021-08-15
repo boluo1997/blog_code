@@ -7,14 +7,19 @@ import org.junit.Test;
 
 public class Doc01_Quickstart {
 
-	public static void main(String[] args) {
-		//
-		SparkSession spark = SparkSession
-				.builder()
-				.appName("Java Spark SQL basic example")
-				.getOrCreate();
+	private static final SparkSession spark = SparkSession
+			.builder()
+			.appName("Java Spark SQL basic example")
+			.master("local[*]")
+			.getOrCreate();
 
-		Dataset<Long> data = spark.range(0, 5);
-		data.write().format("delta").save("/tmp/delta-table");
+	public static void main(String[] args) {
+
+		Dataset<Long> data = SparkSession.active().range(0, 5);
+		data.show();
+		data.write()
+				.format("delta")
+				.mode("overwrite")
+				.save("/tmp/delta-table");
 	}
 }
