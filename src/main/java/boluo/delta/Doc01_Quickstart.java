@@ -16,10 +16,9 @@ public class Doc01_Quickstart {
 	public static void main(String[] args) {
 
 		Dataset<Long> data = SparkSession.active().range(0, 5);
-		data.show();
 		data.write()
 				.format("delta")
 				.mode("overwrite")
-				.save("/tmp/delta-table");
+				.save("./examples/delta-table");
 	}
 }
