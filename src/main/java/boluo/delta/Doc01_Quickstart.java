@@ -1,9 +1,12 @@
 package boluo.delta;
 
+import io.delta.tables.DeltaTable;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.junit.Test;
+
+import static org.apache.spark.sql.functions.*;
 
 public class Doc01_Quickstart {
 
@@ -29,4 +32,16 @@ public class Doc01_Quickstart {
 		System.out.println("---");
 	}
 
+	@Test
+	public void func2() {
+		// Delta Lake provides programmatic APIs to conditional update, delete and merge(upsert) data into tables
+		DeltaTable deltaTable = DeltaTable.forPath("./examples/delta-table");
+
+
+	}
+
 }
+
+
+
+
