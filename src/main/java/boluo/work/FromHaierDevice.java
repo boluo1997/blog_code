@@ -57,12 +57,6 @@ import java.util.stream.Stream;
 
 import static org.apache.spark.sql.functions.*;
 
-/**
- *	主要思想:
- *	将数据分为 全量 和 差异 两部分
- * 	每次拉取数据, 取当前的全量, 和上一次的全量做比较, 比较出今天的差异部分数据
- * 	然后将本次全量, 本次差异存储, 将上一次的全量删除
- */
 public class FromHaierDevice {
 
 	private static final Logger logger = LoggerFactory.getLogger(FromHaier2.class);
@@ -70,6 +64,7 @@ public class FromHaierDevice {
 	private static final CloseableHttpClient http;
 	private static final String pageMatcher = "\\s*共(\\d+)条记录\\s*当前页\\s*(\\d+)/(\\d+)";
 	private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+	private static final Date defaultDate = Date.valueOf(LocalDate.of(2000, 1, 1));
 
 	static {
 		PoolingHttpClientConnectionManager cm = new PoolingHttpClientConnectionManager();
@@ -81,9 +76,9 @@ public class FromHaierDevice {
 	}
 
 	/*
--user=
--pwd=
--o=file:///D:/data/haier_device
+-user=888
+-pwd=666
+-o=file:///D:/data/haier2/device
 	 */
 	public static void main(String[] args) throws ParseException, IOException {
 
@@ -96,11 +91,12 @@ public class FromHaierDevice {
 				.addOption("pwd", "pwd", true, ""), args);
 
 		String outputUri = cli.getOptionValue("o");
-		String user = cli.getOptionValue("user", "18557523125");
-		String pwd = cli.getOptionValue("pwd", "xl123456");
+		String user = cli.getOptionValue("user", "666");
+		String pwd = cli.getOptionValue("pwd", "888");
 		String loginData = String.format("j_username=%s&j_password=%s", user, pwd);
 
 		LocalDateTime now = LocalDateTime.now();
+		long u_ts = now.atZone(ZoneId.systemDefault()).toEpochSecond();
 
 		// 调用: 商家信息管理, 取商家名称
 		HttpClientContext httpContext = HttpClientContext.create();
@@ -114,12 +110,15 @@ public class FromHaierDevice {
 		Dataset<Row> deviceDs = machineUsage(httpContext, merchantId, now.toLocalDate().minusDays(1));
 
 		// 调用: 设备管理		空闲:1	运行:3	故障:4	游离:5	掉线:6	维护:7	上线:8
-		Dataset<Row> currDeviceDs = deviceManage(httpContext, merchantId, String.valueOf(1));
-		String[] status = new String[]{"3", "4", "6", "7", "8"};
+		Dataset<Row> currDeviceDs = deviceManage(httpContext, merchantId, "1");
+		String[] status = {"3", "4", "6", "7", "8"};
 		for (String s : status) {
 			Dataset<Row> otherDeviceManage = deviceManage(httpContext, merchantId, s);
 			currDeviceDs = otherDeviceManage.schema().isEmpty() ? currDeviceDs : currDeviceDs.union(otherDeviceManage);
 		}
+
+		// 运行状态归到空闲状态
+		currDeviceDs = currDeviceDs.withColumn("状态", expr("if(`状态`='运行','空闲',`状态`)"));
 
 		// 取设备管理接口中有, 机器使用次数接口中没有的数据
 		List<Row> otherDevices = currDeviceDs.selectExpr("key", "`设备识别码`").as("a").join(
@@ -145,25 +144,61 @@ public class FromHaierDevice {
 				"left"
 		);
 
-		// TODO 取上一次修改时间的分区
+		// 取上一次修改时间的分区
 		Dataset<Row> timeRow = getPartition(outputUri, null, null);
-		Date hashDate = Date.valueOf("2020-01-01");
-
-		// 数据查询: 本地海尔设备表
-		Dataset<Row> lastAllDeviceDs = spark.read().format("delta").load(outputUri).cache();
+		Date hashDate = timeRow.isEmpty()
+				? defaultDate
+				: timeRow.where(String.format("`商家名称` = '%s'", merchantName))
+				.select(expr("ifnull(max(date),to_date('2000-01-01'))")).first().getAs(0);
 
 		Dataset<Row> allDeviceDs;
-		if (lastAllDeviceDs.schema().isEmpty()) {
-			allDeviceDs = currDeviceDs.withColumn("flag", expr("0"));
+		if (hashDate.equals(defaultDate)) {
+
+			// flag 0:全量数据 1:差异数据
+			allDeviceDs = currDeviceDs.withColumn("flag", expr("explode(array(0,1))"))
+					.withColumn("u_ts", to_timestamp(from_unixtime(expr(String.valueOf(u_ts)))))
+					.withColumn("date", to_date(expr("u_ts")))
+					.withColumn("商家名称", expr(String.format("'%s'", merchantName)));
 		} else {
 
-			Dataset<Row> lastDeviceDs = lastAllDeviceDs.where("flag = 0");
-			Dataset<Row> lastUpdateDs = lastAllDeviceDs.where("flag = 1");
+			// 数据查询: 本地海尔设备表
+			Dataset<Row> lastDevice = spark.read().format("delta").load(outputUri);
+			Dataset<Row> lastAllDeviceDs = lastDevice
+					.where(String.format("date >= '%s' and `商家名称` = '%s'", hashDate, merchantName))
+					.cache();
+
+			Dataset<Row> lastDeviceDs = lastAllDeviceDs.where("flag = 0");    // 上次全量数据
+			Dataset<Row> lastUpdateDs = lastAllDeviceDs.where("flag = 1");    // 上次差异数据
 
 			// 本次修改, 删除, 添加的数据
+			Dataset<Row> currUpdateDs = lastDeviceDs
+					.drop("flag", "u_ts", "date", "商家名称")
+					.as("a")
+					.join(
+							currDeviceDs.as("b"),
+							expr("a.`设备识别码` = b.`设备识别码`"),
+							"full"
+					)
+					.selectExpr("struct(a.*) a", "struct(b.*) b")
+					.where("a != b")
+					.selectExpr("b.*");
 
+			allDeviceDs = currDeviceDs
+					.withColumn("flag", expr("0"))
+					.unionAll(currUpdateDs.withColumn("flag", expr("1")))
+					.withColumn("u_ts", to_timestamp(from_unixtime(expr(String.valueOf(u_ts)))))
+					.withColumn("date", to_date(expr("u_ts")))
+					.withColumn("商家名称", expr(String.format("'%s'", merchantName)))
+					.unionAll(lastUpdateDs);
 		}
 
+		// 数据写入: 本地海尔设备表
+		allDeviceDs.write()
+				.format("delta")
+				.partitionBy("date", "商家名称")
+				.mode(SaveMode.Overwrite)
+				.option("replaceWhere", String.format("date >= '%s' and `商家名称` = '%s'", hashDate, merchantName))
+				.save(outputUri);
 
 	}
 
@@ -341,6 +376,7 @@ public class FromHaierDevice {
 					Element head = doc.selectFirst("table>thead tr");
 					List<String> colName = head.select("td:not([style=display:none;])").stream()
 							.map(i -> i.text().trim())
+							.map(i -> i.startsWith("ICCID") ? "ICCID" : i)        // 去掉ICCID列的图标
 							.collect(Collectors.toList());
 
 					Elements body = doc.select("table>tbody tr");
