@@ -60,7 +60,7 @@ public class Doc01_Quickstart {
 				)
 				.whenMatched()
 				.update(
-						new HashMap<String, Column>(){{
+						new HashMap<String, Column>() {{
 							put("id", expr("newData.id"));
 						}})
 				.whenNotMatched()
@@ -68,6 +68,20 @@ public class Doc01_Quickstart {
 				.execute();
 	}
 
+	@Test
+	public void func3() {
+
+		// read older versions of data using time travel
+		Dataset<Row> ds = SparkSession.active().read().format("delta")
+				.option("versionAsOf", 0)
+				.load("/tmp/delta-table");
+	}
+
+	@Test
+	public void func4() {
+
+		// write a stream of data to a table
+	}
 
 }
 
